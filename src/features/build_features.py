@@ -12,8 +12,13 @@ def compute_aqi_pm25(pm25):
     else:
         return 200
 
+
+
 def build_features(df):
     df = df.copy()
+
+    # Ensure datetime for feature store compatibility
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
 
     df["aqi"] = df["pm2_5"].apply(compute_aqi_pm25)
 
@@ -29,3 +34,4 @@ def build_features(df):
     df.dropna(inplace=True)
 
     return df
+
