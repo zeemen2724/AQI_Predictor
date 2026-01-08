@@ -2,7 +2,8 @@ pandas
 requests
 python-dotenv
 numpy
-hopsworks==3.7.0
+hopsworks
+twofish
 scikit-learn
 joblib
 jupyter
