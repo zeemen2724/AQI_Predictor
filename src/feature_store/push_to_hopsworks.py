@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def push_features_to_hopsworks(df: pd.DataFrame):
+def push_features(df: pd.DataFrame):
     project = hopsworks.login(
         project=os.getenv("HOPSWORKS_PROJECT_NAME"),
         api_key_value=os.getenv("HOPSWORKS_API_KEY")
@@ -24,4 +24,5 @@ def push_features_to_hopsworks(df: pd.DataFrame):
     fg.insert(df)
 
     print("✅ Data pushed to Hopsworks Feature Store")
+
 
