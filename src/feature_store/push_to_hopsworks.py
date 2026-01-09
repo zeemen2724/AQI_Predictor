@@ -14,12 +14,13 @@ def push_features(df: pd.DataFrame):
     fs = project.get_feature_store()
 
     fg = fs.get_or_create_feature_group(
-        name="karachi_air_quality",
-        version=1,
-        description="Hourly air quality data for Karachi",
-        primary_key=["timestamp"],
-        online_enabled=True
-    )
+    name="karachi_air_quality",
+    version=1,
+    description="Hourly air quality data for Karachi",
+    primary_key=["event_id"],   # ✅ FIXED
+    online_enabled=True
+)
+
 
     fg.insert(df)
 
