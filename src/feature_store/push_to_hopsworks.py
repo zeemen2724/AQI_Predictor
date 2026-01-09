@@ -31,7 +31,7 @@ def push_features(df: pd.DataFrame):
         version=1,
         primary_key=["event_id"],  # ✅ String primary key
         event_time="timestamp",     # ✅ timestamp is event_time, NOT primary key
-        online_enabled=True,
+        online_enabled=False,
         description="Karachi AQI features with pollutants and time-based features"
     )
     
