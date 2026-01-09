@@ -28,7 +28,7 @@ def push_features(df: pd.DataFrame):
     # Get or create feature group
     fg = fs.get_or_create_feature_group(
         name="karachi_air_quality",
-        version=1,
+        version=2,
         primary_key=["event_id"],  # ✅ String primary key
         event_time="timestamp",     # ✅ timestamp is event_time, NOT primary key
         online_enabled=False,
