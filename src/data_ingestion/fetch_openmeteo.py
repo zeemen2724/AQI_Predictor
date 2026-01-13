@@ -5,7 +5,7 @@ from urllib3.util.retry import Retry
 from src.utils.config import LATITUDE, LONGITUDE, OPEN_METEO_URL
 
 
-def fetch_openmeteo_data(start_date, end_date):
+def fetch_openmeteo_data(start_date, end_date=None):
     session = requests.Session()
 
     retries = Retry(
@@ -28,9 +28,12 @@ def fetch_openmeteo_data(start_date, end_date):
             "sulphur_dioxide",
             "ozone"
         ],
-        "start_date": start_date,
-        "end_date": end_date
+        "start_date": start_date
     }
+
+    # 👇 ONLY include end_date if explicitly provided
+    if end_date is not None:
+        params["end_date"] = end_date
 
     response = session.get(
         OPEN_METEO_URL,
@@ -40,6 +43,10 @@ def fetch_openmeteo_data(start_date, end_date):
     response.raise_for_status()
 
     data = response.json()
+
+    if "hourly" not in data:
+        return pd.DataFrame()
+
     df = pd.DataFrame(data["hourly"])
     df["timestamp"] = pd.to_datetime(df["time"])
     df.drop(columns=["time"], inplace=True)
