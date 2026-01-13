@@ -30,7 +30,12 @@ def main():
         print(f"📈 Incremental run → fetching data from {start_date}")
 
     # Fetch latest data
-    df_raw = fetch_openmeteo_data(start_date=start_date)
+    end_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+    df_raw = fetch_openmeteo_data(
+        start_date=start_date,
+        end_date=end_date
+    )
 
     if df_raw.empty:
         print("🟡 No new data available. Exiting cleanly.")
