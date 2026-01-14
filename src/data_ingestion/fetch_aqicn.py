@@ -6,17 +6,21 @@ API_KEY = os.getenv("AQICN_API_KEY")
 
 def fetch_aqicn_live(city="karachi"):
     url = f"https://api.waqi.info/feed/{city}/?token={API_KEY}"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     response.raise_for_status()
+
     data = response.json()
 
-    if data["status"] != "ok":
+    if data.get("status") != "ok":
         return pd.DataFrame()
 
     d = data["data"]
 
+    timestamp = pd.to_datetime(d["time"]["iso"], utc=True)
+
     row = {
-        "timestamp": pd.to_datetime(d["time"]["iso"]),
+        "timestamp": timestamp,
+        "event_id": timestamp.strftime("%Y%m%d%H"),  # 🔑 REQUIRED
         "pm2_5": d["iaqi"].get("pm25", {}).get("v"),
         "pm10": d["iaqi"].get("pm10", {}).get("v"),
         "carbon_monoxide": d["iaqi"].get("co", {}).get("v"),
