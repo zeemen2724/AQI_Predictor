@@ -26,7 +26,8 @@ def main():
         print(f"🆕 First run → fetching last 90 days from {start_date}")
     else:
         # Incremental run
-        start_date = last_ts.strftime("%Y-%m-%d")
+        start_ts = last_ts + timedelta(hours=1)
+        start_date = start_ts.strftime("%Y-%m-%dT%H:%M")
         print(f"📈 Incremental run → fetching data from {start_date}")
 
     # Fetch latest data
@@ -36,6 +37,9 @@ def main():
         start_date=start_date,
         end_date=end_date
     )
+
+    if last_ts is not None:
+        df_raw = df_raw[df_raw["timestamp"] > last_ts]
 
     if df_raw.empty:
         print("🟡 No new data available. Exiting cleanly.")
