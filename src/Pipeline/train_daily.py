@@ -24,9 +24,17 @@ def main():
     print("📥 Reading features from Hopsworks...")
     df = fg.read()
 
+    # Minimum rows safety
     if df.shape[0] < 500:
         print("⚠️ Not enough data to train. Skipping.")
         return
+    
+    # Train only once per day
+    from datetime import datetime
+    if datetime.utcnow().hour != 2:
+        print("⏭️ Not training hour. Exiting.")
+        return
+    
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
