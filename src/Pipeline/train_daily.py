@@ -2,9 +2,9 @@ import os
 import hopsworks
 import pandas as pd
 
-from src.model.train_models import train_models
-from src.model.evaluate import evaluate_models
-from src.model.save_models import save_models
+from src.models.train_models import train_models
+from src.models.evaluate import evaluate_models
+from src.models.save_model import save_models
 
 def main():
     print("🚀 Starting DAILY training pipeline...")
