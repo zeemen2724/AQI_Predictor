@@ -4,6 +4,7 @@ import pandas as pd
 
 API_KEY = os.getenv("AQICN_API_KEY")
 
+
 def fetch_aqicn_live(city="karachi"):
     url = f"https://api.waqi.info/feed/{city}/?token={API_KEY}"
     response = requests.get(url, timeout=30)
@@ -20,13 +21,13 @@ def fetch_aqicn_live(city="karachi"):
 
     row = {
         "timestamp": timestamp,
-        "event_id": timestamp.strftime("%Y%m%d%H"),  # 🔑 REQUIRED
-        "pm2_5": d["iaqi"].get("pm25", {}).get("v"),
-        "pm10": d["iaqi"].get("pm10", {}).get("v"),
-        "carbon_monoxide": d["iaqi"].get("co", {}).get("v"),
-        "nitrogen_dioxide": d["iaqi"].get("no2", {}).get("v"),
-        "sulphur_dioxide": d["iaqi"].get("so2", {}).get("v"),
-        "ozone": d["iaqi"].get("o3", {}).get("v"),
+        "event_id": timestamp.strftime("%Y%m%d%H"),  # 🔑 HOURLY DEDUP KEY
+        "pm2_5": d.get("iaqi", {}).get("pm25", {}).get("v"),
+        "pm10": d.get("iaqi", {}).get("pm10", {}).get("v"),
+        "carbon_monoxide": d.get("iaqi", {}).get("co", {}).get("v"),
+        "nitrogen_dioxide": d.get("iaqi", {}).get("no2", {}).get("v"),
+        "sulphur_dioxide": d.get("iaqi", {}).get("so2", {}).get("v"),
+        "ozone": d.get("iaqi", {}).get("o3", {}).get("v"),
     }
 
     return pd.DataFrame([row])

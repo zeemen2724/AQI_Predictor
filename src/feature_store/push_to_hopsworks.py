@@ -7,9 +7,6 @@ load_dotenv()
 
 
 def get_last_ingested_timestamp(fs):
-    """
-    Fetch the most recent timestamp from the feature group
-    """
     try:
         fg = fs.get_feature_group(
             name="karachi_air_quality",
@@ -30,9 +27,6 @@ def get_last_ingested_timestamp(fs):
 
 
 def push_features(df: pd.DataFrame):
-    """
-    Push engineered features to Hopsworks Feature Store
-    """
     print("📦 Pushing features to Hopsworks...")
 
     project = hopsworks.login(
@@ -47,7 +41,7 @@ def push_features(df: pd.DataFrame):
         version=2,
         primary_key=["event_id"],
         event_time="timestamp",
-        online_enabled=True,   # 🔥 REQUIRED FOR ONLINE UPDATES
+        online_enabled=True,
         description="Karachi AQI features with pollutants and time-based features"
     )
 

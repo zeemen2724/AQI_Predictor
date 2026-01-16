@@ -6,10 +6,8 @@ import pandas as pd
 from src.data_ingestion.fetch_openmeteo import fetch_openmeteo_data
 from src.data_ingestion.fetch_aqicn import fetch_aqicn_live
 from src.features.build_features import build_features
-from src.feature_store.push_to_hopsworks import (
-    push_features,
-    get_last_ingested_timestamp
-)
+from src.feature_store.push_to_hopsworks import push_features
+
 
 def main():
     print("🔄 Starting AQI pipeline...")
@@ -20,16 +18,29 @@ def main():
     )
     fs = project.get_feature_store()
 
-    last_ts = get_last_ingested_timestamp(fs)
+    fg = fs.get_feature_group("karachi_air_quality", version=2)
+
+    # ─────────────────────────────
+    # CHECK IF FEATURE GROUP EMPTY
+    # ─────────────────────────────
+    try:
+        df_latest = fg.read(
+            select=["event_id", "timestamp"],
+            limit=1,
+            sort_by="event_id",
+            ascending=False
+        )
+    except Exception:
+        df_latest = pd.DataFrame()
 
     # ─────────────────────────────
     # BOOTSTRAP → OPEN-METEO
     # ─────────────────────────────
-    if last_ts is None:
+    if df_latest.empty:
         start_date = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
         end_date = datetime.utcnow().strftime("%Y-%m-%d")
 
-        print(f"🆕 Bootstrap run → Open-Meteo {start_date} → {end_date}")
+        print(f"🆕 Bootstrap → Open-Meteo {start_date} → {end_date}")
 
         df_raw = fetch_openmeteo_data(start_date, end_date)
 
@@ -37,7 +48,9 @@ def main():
     # INCREMENTAL → AQICN
     # ─────────────────────────────
     else:
-        print("⚡ Incremental run → AQICN")
+        print("⚡ Incremental → AQICN")
+
+        last_event_id = df_latest["event_id"].iloc[0]
 
         df_new = fetch_aqicn_live()
 
@@ -45,12 +58,15 @@ def main():
             print("🟡 No AQICN data.")
             return
 
-        if df_new["timestamp"].iloc[0] <= last_ts:
-            print("🟡 AQICN data already ingested.")
+        new_event_id = df_new["event_id"].iloc[0]
+
+        if new_event_id <= last_event_id:
+            print("🟡 AQICN hour already ingested.")
             return
 
-        # 🔥 Pull last 48 hours for lag continuity
-        fg = fs.get_feature_group("karachi_air_quality", version=2)
+        # 🔥 Pull last 48h for lag continuity
+        last_ts = df_latest["timestamp"].iloc[0]
+
         df_hist = fg.read(
             start_time=last_ts - timedelta(hours=48),
             end_time=last_ts
@@ -64,8 +80,8 @@ def main():
     print("🧠 Building features...")
     df_features = build_features(df_raw)
 
-    # Keep ONLY the newest row
-    df_features = df_features.sort_values("timestamp").tail(1)
+    # Keep ONLY the newest hour
+    df_features = df_features.sort_values("event_id").tail(1)
 
     if df_features.empty:
         print("🟡 No features to push.")
@@ -77,6 +93,7 @@ def main():
     push_features(df_features)
 
     print("✅ AQI pipeline completed")
+
 
 if __name__ == "__main__":
     main()
