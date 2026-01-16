@@ -1,8 +1,7 @@
 import pandas as pd
-from datetime import datetime
+
 
 def compute_aqi_pm25(pm25):
-    # simplified EPA AQI logic (acceptable for projects)
     if pm25 <= 12:
         return pm25 * 50 / 12
     elif pm25 <= 35.4:
@@ -13,14 +12,14 @@ def compute_aqi_pm25(pm25):
         return 200
 
 
-
 def build_features(df):
     df = df.copy()
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
-    # 🔑 Create supported primary key
-    df["event_id"] = df["timestamp"].astype(str)
+    # ⚠️ DO NOT overwrite event_id if already present
+    if "event_id" not in df.columns:
+        df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
 
     df["aqi"] = df["pm2_5"].apply(compute_aqi_pm25)
 
@@ -36,5 +35,3 @@ def build_features(df):
     df.dropna(inplace=True)
 
     return df
-
-

@@ -1,0 +1,32 @@
+name: Daily Model Training
+
+on:
+  schedule:
+    - cron: "0 2 * * *"  # runs daily at 2am UTC
+  workflow_dispatch:
+
+jobs:
+  run-training-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "hopsworks[python]"
+          pip install scikit-learn pandas joblib
+
+      - name: Run daily training pipeline
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT_NAME: ${{ secrets.HOPSWORKS_PROJECT_NAME }}
+        run: |
+          python -m src.pipelines.train_daily
