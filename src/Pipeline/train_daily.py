@@ -29,11 +29,6 @@ def main():
         print("⚠️ Not enough data to train. Skipping.")
         return
     
-    # Train only once per day
-    from datetime import datetime
-    if datetime.utcnow().hour != 2:
-        print("⏭️ Not training hour. Exiting.")
-        return
     
 
     df = df.sort_values("timestamp").reset_index(drop=True)
