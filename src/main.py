@@ -24,12 +24,10 @@ def main():
     # CHECK IF FEATURE GROUP EMPTY
     # ─────────────────────────────
     try:
-        df_latest = fg.read(
-            select=["event_id", "timestamp"],
-            limit=1,
-            sort_by="event_id",
-            ascending=False
+        df_latest = fg.read_online(
+           limit=1
         )
+
     except Exception:
         df_latest = pd.DataFrame()
 

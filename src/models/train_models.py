@@ -29,7 +29,7 @@ def train_models(df):
     y_pred = lr.predict(X_test)
     metrics["LinearRegression"] = {
         "MAE": mean_absolute_error(y_test, y_pred),
-        "RMSE": mean_squared_error(y_test, y_pred, squared=False),
+        "RMSE": mean_squared_error(y_test, y_pred) ** 0.5,
         "R2": r2_score(y_test, y_pred)
     }
     models["LinearRegression"] = lr
@@ -40,7 +40,7 @@ def train_models(df):
     y_pred = rf.predict(X_test)
     metrics["RandomForest"] = {
         "MAE": mean_absolute_error(y_test, y_pred),
-        "RMSE": mean_squared_error(y_test, y_pred, squared=False),
+        "RMSE": mean_squared_error(y_test, y_pred) ** 0.5,
         "R2": r2_score(y_test, y_pred)
     }
     models["RandomForest"] = rf
@@ -51,7 +51,7 @@ def train_models(df):
     y_pred = gb.predict(X_test)
     metrics["GradientBoosting"] = {
         "MAE": mean_absolute_error(y_test, y_pred),
-        "RMSE": mean_squared_error(y_test, y_pred, squared=False),
+        "RMSE": mean_squared_error(y_test, y_pred) ** 0.5,
         "R2": r2_score(y_test, y_pred)
     }
     models["GradientBoosting"] = gb
