@@ -43,11 +43,19 @@ def main():
     else:
         print("⚡ Incremental → AQICN")
 
-        df_latest = fg.read(
-            limit=1,
-            sort_by="timestamp",
-            ascending=False
+        df_all = fg.read()
+
+        if df_all.empty:
+            print("🟡 Feature group empty. Run BOOTSTRAP once.")
+            return
+        
+        df_latest = (
+            df_all
+            .sort_values("timestamp")
+            .tail(1)
+            .reset_index(drop=True)
         )
+
 
 
         if df_latest.empty:
