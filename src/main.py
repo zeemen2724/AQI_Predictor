@@ -43,7 +43,7 @@ def main():
     else:
         print("⚡ Incremental → AQICN")
 
-        df_latest = fg.read_online(limit=1)
+        df_latest = fg.read(limit=1, sort_by="timestamp", ascending=False)
 
         if df_latest.empty:
             print("🟡 Online store empty. Run BOOTSTRAP once.")
