@@ -9,46 +9,48 @@ from src.features.build_features import build_features
 from src.feature_store.push_to_hopsworks import push_features
 
 
+# 🔥 IMPORTANT: bootstrap must be MANUAL
+BOOTSTRAP = False   # set True ONLY once, then switch back to False
+
+
 def main():
     print("🔄 Starting AQI pipeline...")
 
     project = hopsworks.login(
         api_key_value=os.getenv("HOPSWORKS_API_KEY"),
-        project=os.getenv("HOPSWORKS_PROJECT_NAME")
+        project=os.getenv("HOPSWORKS_PROJECT_NAME"),
     )
     fs = project.get_feature_store()
 
-    fg = fs.get_feature_group("karachi_air_quality", version=2)
+    fg = fs.get_feature_group(
+        name="karachi_air_quality",
+        version=2
+    )
 
     # ─────────────────────────────
-    # CHECK IF FEATURE GROUP EMPTY
+    # BOOTSTRAP MODE (ONE TIME ONLY)
     # ─────────────────────────────
-    try:
-        df_latest = fg.read_online(
-           limit=1
-        )
-
-    except Exception:
-        df_latest = pd.DataFrame()
-
-    # ─────────────────────────────
-    # BOOTSTRAP → OPEN-METEO
-    # ─────────────────────────────
-    if df_latest.empty:
+    if BOOTSTRAP:
         start_date = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
         end_date = datetime.utcnow().strftime("%Y-%m-%d")
 
         print(f"🆕 Bootstrap → Open-Meteo {start_date} → {end_date}")
-
         df_raw = fetch_openmeteo_data(start_date, end_date)
 
     # ─────────────────────────────
-    # INCREMENTAL → AQICN
+    # INCREMENTAL MODE (HOURLY)
     # ─────────────────────────────
     else:
         print("⚡ Incremental → AQICN")
 
+        df_latest = fg.read_online(limit=1)
+
+        if df_latest.empty:
+            print("🟡 Online store empty. Run BOOTSTRAP once.")
+            return
+
         last_event_id = df_latest["event_id"].iloc[0]
+        last_ts = df_latest["timestamp"].iloc[0]
 
         df_new = fetch_aqicn_live()
 
@@ -62,9 +64,7 @@ def main():
             print("🟡 AQICN hour already ingested.")
             return
 
-        # 🔥 Pull last 48h for lag continuity
-        last_ts = df_latest["timestamp"].iloc[0]
-
+        # pull history for lag features
         df_hist = fg.read(
             start_time=last_ts - timedelta(hours=48),
             end_time=last_ts
@@ -78,17 +78,14 @@ def main():
     print("🧠 Building features...")
     df_features = build_features(df_raw)
 
-    # Keep ONLY the newest hour
+    # push ONLY newest hour
     df_features = df_features.sort_values("event_id").tail(1)
 
     if df_features.empty:
         print("🟡 No features to push.")
         return
 
-    # ─────────────────────────────
-    # PUSH
-    # ─────────────────────────────
-    push_features(df_features)
+    push_features(fg, df_features)
 
     print("✅ AQI pipeline completed")
 
