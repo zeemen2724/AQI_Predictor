@@ -1,4 +1,5 @@
 import os
+os.environ["HOPSWORKS_DISABLE_MODEL_SERVING"] = "1"
 import hopsworks
 import pandas as pd
 
