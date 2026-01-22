@@ -96,10 +96,15 @@ def main():
             print("🟡 AQICN hour already ingested.")
             return
 
-        df_hist = fg.read(
-            start_time=last_ts - timedelta(hours=48),
-            end_time=last_ts
-        )
+        print("📥 Reading recent history for checkpoint...")
+
+        df_hist = fg.read()
+        
+        df_hist = df_hist[
+            (df_hist["timestamp"] > last_ts - timedelta(hours=48)) &
+            (df_hist["timestamp"] <= last_ts)
+        ]
+
 
 
 
