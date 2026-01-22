@@ -11,6 +11,17 @@ from src.data_ingestion.fetch_aqicn import fetch_aqicn_live
 from src.features.build_features import build_features
 from src.feature_store.push_to_hopsworks import push_features
 
+import time
+
+def safe_read(fg, retries=3, wait=10):
+    for i in range(retries):
+        try:
+            return fg.read()
+        except Exception as e:
+            print(f"⚠️ Hopsworks read failed ({i+1}/{retries}), retrying...")
+            time.sleep(wait)
+    raise RuntimeError("❌ Feature Store read failed after retries")
+
 
 # 🔥 IMPORTANT: bootstrap must be MANUAL
 BOOTSTRAP = False   # set True ONLY once, then switch back to False
@@ -46,8 +57,7 @@ def main():
     else:
         print("⚡ Incremental → AQICN")
 
-        df_all = fg.read()
-
+        df_all = safe_read(fg)
         if df_all.empty:
             print("🟡 Feature group empty. Run BOOTSTRAP once.")
             return
@@ -81,10 +91,12 @@ def main():
             return
 
         # pull history for lag features
-        df_hist = fg.read(
-            start_time=last_ts - timedelta(hours=48),
-            end_time=last_ts
-        )
+        df_hist = safe_read(fg)
+        df_hist = df_hist[
+            (df_hist["timestamp"] >= last_ts - timedelta(hours=48)) &
+            (df_hist["timestamp"] < last_ts)
+       ]
+
 
         df_raw = pd.concat([df_hist, df_new], ignore_index=True)
 
