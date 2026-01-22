@@ -55,60 +55,49 @@ def main():
     # INCREMENTAL MODE (HOURLY)
     # ─────────────────────────────
     else:
-        
-
-        print("📥 Reading recent history for checkpoint...")
-
-        df_hist = fg.read(
-            start_time=datetime.utcnow() - timedelta(days=3)
-        )
-        
-        if df_hist.empty:
+        print("📥 Reading feature store (full read)...")
+    
+        # ✅ SAFE full read (Hopsworks-compatible)
+        df_all = safe_read(fg)
+    
+        if df_all.empty:
             print("🟡 Feature group empty. Run BOOTSTRAP once.")
             return
-        
+    
+        # get latest ingested row
         df_latest = (
-            df_hist
+            df_all
             .sort_values("timestamp")
             .tail(1)
             .reset_index(drop=True)
         )
-        
-
-
-
-        if df_latest.empty:
-            print("🟡 Online store empty. Run BOOTSTRAP once.")
-            return
-
+    
         last_event_id = df_latest["event_id"].iloc[0]
         last_ts = df_latest["timestamp"].iloc[0]
-
+    
+        print(f"⏱️ Last ingested timestamp: {last_ts}")
+    
+        # fetch new AQICN data
         df_new = fetch_aqicn_live()
-
+    
         if df_new.empty:
             print("🟡 No AQICN data.")
             return
-
+    
         new_event_id = df_new["event_id"].iloc[0]
-
+    
         if new_event_id <= last_event_id:
             print("🟡 AQICN hour already ingested.")
             return
-
-        print("📥 Reading recent history for checkpoint...")
-
-        df_hist = fg.read()
-        
-        df_hist = df_hist[
-            (df_hist["timestamp"] > last_ts - timedelta(hours=48)) &
-            (df_hist["timestamp"] <= last_ts)
+    
+        # ✅ slice history in pandas (NOT Hopsworks)
+        df_hist = df_all[
+            (df_all["timestamp"] > last_ts - timedelta(hours=48)) &
+            (df_all["timestamp"] <= last_ts)
         ]
-
-
-
-
+    
         df_raw = pd.concat([df_hist, df_new], ignore_index=True)
+
 
     # ─────────────────────────────
     # FEATURE ENGINEERING
