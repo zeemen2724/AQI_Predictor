@@ -55,19 +55,25 @@ def main():
     # INCREMENTAL MODE (HOURLY)
     # ─────────────────────────────
     else:
-        print("⚡ Incremental → AQICN")
+        
 
-        df_all = safe_read(fg)
-        if df_all.empty:
+        print("📥 Reading recent history for checkpoint...")
+
+        df_hist = fg.read(
+            start_time=datetime.utcnow() - timedelta(days=3)
+        )
+        
+        if df_hist.empty:
             print("🟡 Feature group empty. Run BOOTSTRAP once.")
             return
         
         df_latest = (
-            df_all
+            df_hist
             .sort_values("timestamp")
             .tail(1)
             .reset_index(drop=True)
         )
+        
 
 
 
@@ -90,12 +96,11 @@ def main():
             print("🟡 AQICN hour already ingested.")
             return
 
-        # pull history for lag features
-        df_hist = safe_read(fg)
-        df_hist = df_hist[
-            (df_hist["timestamp"] >= last_ts - timedelta(hours=48)) &
-            (df_hist["timestamp"] < last_ts)
-       ]
+        df_hist = fg.read(
+            start_time=last_ts - timedelta(hours=48),
+            end_time=last_ts
+        )
+
 
 
         df_raw = pd.concat([df_hist, df_new], ignore_index=True)
