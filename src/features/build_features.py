@@ -17,6 +17,9 @@ def build_features(df):
 
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
+    # ✅ REQUIRED PRIMARY KEY
+    df["event_id"] = df["timestamp"].astype("int64") // 10**9
+
     df["aqi"] = df["pm2_5"].apply(compute_aqi_pm25)
 
     df["hour"] = df["timestamp"].dt.hour
@@ -31,3 +34,4 @@ def build_features(df):
     df.dropna(inplace=True)
 
     return df
+

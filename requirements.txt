@@ -2,5 +2,8 @@ requests
 pandas
 scikit-learn
 joblib
-hopsworks[python]
 python-dotenv
+
+hopsworks==4.2.*
+hsfs==4.2.*
+pyarrow<15
