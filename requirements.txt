@@ -4,9 +4,6 @@ scikit-learn
 joblib
 python-dotenv
 
-# Hopsworks stack (Python 3.10 compatible)
 hopsworks==4.2.10
-hsfs==3.7.9
 
-# PyArrow compatibility
 pyarrow<15
