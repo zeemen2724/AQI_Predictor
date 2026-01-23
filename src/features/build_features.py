@@ -17,10 +17,6 @@ def build_features(df):
 
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
-    # ⚠️ DO NOT overwrite event_id if already present
-    if "event_id" not in df.columns:
-        df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
-
     df["aqi"] = df["pm2_5"].apply(compute_aqi_pm25)
 
     df["hour"] = df["timestamp"].dt.hour

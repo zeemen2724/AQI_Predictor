@@ -1,5 +1,8 @@
 import os
 os.environ["HOPSWORKS_DISABLE_MODEL_SERVING"] = "1"
+from dotenv import load_dotenv
+load_dotenv()
+
 import hopsworks
 import pandas as pd
 
@@ -29,8 +32,6 @@ def main():
     if df.shape[0] < 500:
         print("⚠️ Not enough data to train. Skipping.")
         return
-    
-    
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 

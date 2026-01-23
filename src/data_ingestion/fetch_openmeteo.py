@@ -17,23 +17,22 @@ def fetch_openmeteo_data(start_date, end_date=None):
 
     session.mount("https://", HTTPAdapter(max_retries=retries))
 
+    # 🔑 Open-Meteo REQUIRES end_date if start_date exists
+    if end_date is None:
+        end_date = start_date
+
     params = {
         "latitude": LATITUDE,
         "longitude": LONGITUDE,
-        "hourly": [
-            "pm2_5",
-            "pm10",
-            "carbon_monoxide",
-            "nitrogen_dioxide",
-            "sulphur_dioxide",
-            "ozone"
-        ],
-        "start_date": start_date
+        # ✅ MUST be comma-separated string
+        "hourly": (
+            "pm2_5,pm10,carbon_monoxide,"
+            "nitrogen_dioxide,sulphur_dioxide,ozone"
+        ),
+        "start_date": start_date,
+        "end_date": end_date,
+        "timezone": "UTC"
     }
-
-    # 👇 ONLY include end_date if explicitly provided
-    if end_date is not None:
-        params["end_date"] = end_date
 
     response = session.get(
         OPEN_METEO_URL,
@@ -48,7 +47,14 @@ def fetch_openmeteo_data(start_date, end_date=None):
         return pd.DataFrame()
 
     df = pd.DataFrame(data["hourly"])
-    df["timestamp"] = pd.to_datetime(df["time"])
+
+    # ✅ Correct timestamp
+    df["timestamp"] = pd.to_datetime(df["time"], utc=True)
+
+    # ✅ Hourly event_id
+    df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
+
+    # cleanup
     df.drop(columns=["time"], inplace=True)
 
     return df

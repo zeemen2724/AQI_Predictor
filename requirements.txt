@@ -5,4 +5,4 @@ scikit-learn
 python-dotenv
 pyarrow
 confluent-kafka
-hopsworks[python]
+hopsworks[python]python-dotenv
