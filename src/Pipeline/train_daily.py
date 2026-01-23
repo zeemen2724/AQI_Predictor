@@ -23,10 +23,17 @@ def main():
     # Read feature group
     fg = fs.get_feature_group(
         name="karachi_air_quality",
-        version=2
+        version=3
     )
     print("📥 Reading features from Hopsworks...")
-    df = fg.read()
+    
+    td = fg.create_training_data(
+    description="AQI training dataset",
+    version=1
+    )
+ 
+    df = td.read()
+
 
     # Minimum rows safety
     if df.shape[0] < 500:
