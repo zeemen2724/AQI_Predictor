@@ -1,8 +1,6 @@
-hopsworks==4.2.*
-pandas<2.2.0
 requests
+pandas
 scikit-learn
+joblib
+hopsworks[python]
 python-dotenv
-pyarrow
-confluent-kafka
-hopsworks[python]python-dotenv
