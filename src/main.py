@@ -15,7 +15,7 @@ from src.features.build_features import build_features
 from src.feature_store.push_to_hopsworks import push_features
 
 
-BOOTSTRAP = True   # ⚠️ TRUE ONLY ONCE
+BOOTSTRAP = False  
 
 
 def safe_read(fg, retries=3, wait=10):
