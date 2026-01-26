@@ -1,59 +1,60 @@
-from src.models.train_models import train_models
-from src.models.evaluate import evaluate_models
-from src.models.save_model import save_models
+import requests
+import pandas as pd
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from src.utils.config import LATITUDE, LONGITUDE, OPEN_METEO_URL
 
-def main():
-    print("🚀 Starting DAILY training pipeline...")
 
-    project = hopsworks.login(
-        api_key_value=os.getenv("HOPSWORKS_API_KEY"),
-        project=os.getenv("HOPSWORKS_PROJECT_NAME")
-    )
-    fs = project.get_feature_store()
+def fetch_openmeteo_data(start_date, end_date=None):
+    session = requests.Session()
 
-    # Get Feature Group
-    fg = fs.get_feature_group(
-        name="karachi_air_quality",
-        version=3
+    retries = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
     )
 
-    # Get or create Feature View
-    try:
-        fv = fs.get_feature_view(
-            name="karachi_air_quality_fv",
-            version=1
-        )
-        print("📊 Using existing Feature View")
-    except:
-        fv = fs.create_feature_view(
-            name="karachi_air_quality_fv",
-            version=1,
-            query=fg.select_all(),
-            labels=["aqi"],
-            description="AQI feature view for training"
-        )
-        print("🆕 Feature View created")
+    session.mount("https://", HTTPAdapter(max_retries=retries))
 
-    # Get Training Dataset
-    try:
-        td = fv.get_training_dataset(version=1)
-    except:
-        td = fv.create_training_dataset(
-            description="AQI training dataset",
-            version=1
-        )
+    # 🔑 Open-Meteo REQUIRES end_date if start_date exists
+    if end_date is None:
+        end_date = start_date
 
-    print("📥 Reading training data...")
-    df = td.read()
+    params = {
+        "latitude": LATITUDE,
+        "longitude": LONGITUDE,
+        # ✅ MUST be comma-separated string
+        "hourly": (
+            "pm2_5,pm10,carbon_monoxide,"
+            "nitrogen_dioxide,sulphur_dioxide,ozone"
+        ),
+        "start_date": start_date,
+        "end_date": end_date,
+        "timezone": "UTC"
+    }
 
-    if df.shape[0] < 500:
-        print("⚠️ Not enough data to train. Skipping.")
-        return
+    response = session.get(
+        OPEN_METEO_URL,
+        params=params,
+        timeout=30
+    )
+    response.raise_for_status()
 
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    data = response.json()
 
-    models, metrics = train_models(df)
-    evaluate_models(metrics)
-    save_models(models, metrics)
+    if "hourly" not in data:
+        return pd.DataFrame()
 
-    print("✅ Daily training pipeline finished successfully")
+    df = pd.DataFrame(data["hourly"])
+
+    # ✅ Correct timestamp
+    df["timestamp"] = pd.to_datetime(df["time"], utc=True)
+
+    # ✅ Hourly event_id
+    df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
+
+    # cleanup
+    df.drop(columns=["time"], inplace=True)
+
+    return df

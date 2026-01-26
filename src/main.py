@@ -1,4 +1,5 @@
 import os
+from tracemalloc import start
 os.environ["HOPSWORKS_DISABLE_MODEL_SERVING"] = "1"
 
 from datetime import datetime, timedelta
@@ -70,9 +71,14 @@ def main():
         last_ts = df_hist["timestamp"].max()
         print(f"⏱️ Last timestamp in FS: {last_ts}")
     
-        # ✅ FIX: keep same day, let event_id prevent duplicates
         start = last_ts.strftime("%Y-%m-%d")
-        df_raw = fetch_openmeteo_data(start_date=start)
+        end = datetime.utcnow().strftime("%Y-%m-%d")
+        
+        df_raw = fetch_openmeteo_data(
+            start_date=start,
+            end_date=end
+        )
+
     
         if df_raw.empty:
             print("🟡 No new Open-Meteo data")
