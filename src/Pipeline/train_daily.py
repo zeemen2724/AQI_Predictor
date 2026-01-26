@@ -25,48 +25,50 @@ def main():
     fs = project.get_feature_store()
 
     # -----------------------
-    # Feature Group
+    # Feature Group v3
     # -----------------------
-    print("📊 Fetching Feature Group...")
+    print("📊 Fetching Feature Group v3...")
     fg = fs.get_feature_group(
         name="karachi_air_quality",
         version=3
     )
 
     # -----------------------
-    # Feature View
+    # Feature View v2 (includes aqi)
     # -----------------------
-    print("🧠 Creating/Fetching Feature View...")
+    print("🧠 Creating/Fetching Feature View v2...")
     
-    # Use get_or_create_feature_view for safer handling
     fv = fs.get_or_create_feature_view(
         name="karachi_air_quality_fv",
-        version=1,
+        version=2,  # ✅ v2 without labels parameter
         query=fg.select_all(),
-        labels=["aqi"],
-        description="AQI feature view for training"
+        description="AQI feature view - all columns including aqi for manual train/test split"
     )
     
     if fv is None:
         raise RuntimeError("❌ Feature View creation failed")
     
-    print("✅ Feature View ready")
+    print("✅ Feature View v2 ready")
 
     # -----------------------
-    # Read Data Directly
+    # Read Data
     # -----------------------
-    print("📥 Reading data from Feature View...")
-    
-    # Read directly from feature view (simpler than training dataset)
+    print("📥 Reading all data from Feature Store...")
     df = fv.get_batch_data()
     
     print(f"📈 Total rows: {df.shape[0]}")
+    print(f"📋 Columns: {list(df.columns)}")
 
+    # Verify aqi exists
+    if 'aqi' not in df.columns:
+        raise ValueError(f"❌ 'aqi' column missing! Available: {list(df.columns)}")
+
+    # Minimum data check
     if df.shape[0] < 500:
         print("⚠️ Not enough data to train. Skipping.")
         return
 
-    # Sort by timestamp for time-series split
+    # Sort by timestamp for proper time-series split
     df = df.sort_values("timestamp").reset_index(drop=True)
 
     # -----------------------
