@@ -84,9 +84,20 @@ def main():
             print("🟡 No new Open-Meteo data")
             return
 
+
     # ---------------------------
     # FEATURES
     # ---------------------------
+
+    last_ts = fg.read().max()["timestamp"]
+    print(f"⏱️ Last timestamp in FS: {last_ts}")
+    
+    df_new = df_raw[df_raw["timestamp"] > last_ts]
+    
+    if df_new.empty:
+        print("🟡 No new data to ingest. Skipping insert.")
+        return
+
     df_features = build_features(df_raw)
 
     if df_features.empty:

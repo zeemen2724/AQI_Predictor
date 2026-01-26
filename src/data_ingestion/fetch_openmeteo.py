@@ -51,8 +51,6 @@ def fetch_openmeteo_data(start_date, end_date=None):
     # ✅ Correct timestamp
     df["timestamp"] = pd.to_datetime(df["time"], utc=True)
 
-    # ✅ Hourly event_id
-    df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
 
     # cleanup
     df.drop(columns=["time"], inplace=True)
