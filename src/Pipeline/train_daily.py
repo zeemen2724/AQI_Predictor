@@ -1,60 +1,93 @@
-import requests
+import os
+os.environ["HOPSWORKS_DISABLE_MODEL_SERVING"] = "1"
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import hopsworks
 import pandas as pd
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from src.utils.config import LATITUDE, LONGITUDE, OPEN_METEO_URL
+
+from src.models.train_models import train_models
+from src.models.evaluate import evaluate_models
+from src.models.save_model import save_models
 
 
-def fetch_openmeteo_data(start_date, end_date=None):
-    session = requests.Session()
+def main():
+    print("🚀 Starting DAILY training pipeline...")
 
-    retries = Retry(
-        total=5,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"]
+    # -----------------------
+    # Login
+    # -----------------------
+    project = hopsworks.login(
+        api_key_value=os.getenv("HOPSWORKS_API_KEY"),
+        project=os.getenv("HOPSWORKS_PROJECT_NAME"),
+    )
+    fs = project.get_feature_store()
+
+    # -----------------------
+    # Feature Group
+    # -----------------------
+    print("📊 Fetching Feature Group...")
+    fg = fs.get_feature_group(
+        name="karachi_air_quality",
+        version=3
     )
 
-    session.mount("https://", HTTPAdapter(max_retries=retries))
+    # -----------------------
+    # Feature View
+    # -----------------------
+    print("🧠 Fetching / creating Feature View...")
+    try:
+        fv = fs.get_feature_view(
+            name="karachi_air_quality_fv",
+            version=1
+        )
+        print("📊 Using existing Feature View")
+    except:
+        fv = fs.create_feature_view(
+            name="karachi_air_quality_fv",
+            version=1,
+            query=fg.select_all(),
+            labels=["aqi"],
+            description="AQI feature view for training"
+        )
+        print("🆕 Feature View created")
 
-    # 🔑 Open-Meteo REQUIRES end_date if start_date exists
-    if end_date is None:
-        end_date = start_date
+    # -----------------------
+    # Training Dataset
+    # -----------------------
+    print("📦 Fetching / creating Training Dataset...")
+    try:
+        td = fv.get_training_dataset(version=1)
+    except:
+        td = fv.create_training_dataset(
+            version=1,
+            description="AQI training dataset"
+        )
 
-    params = {
-        "latitude": LATITUDE,
-        "longitude": LONGITUDE,
-        # ✅ MUST be comma-separated string
-        "hourly": (
-            "pm2_5,pm10,carbon_monoxide,"
-            "nitrogen_dioxide,sulphur_dioxide,ozone"
-        ),
-        "start_date": start_date,
-        "end_date": end_date,
-        "timezone": "UTC"
-    }
+    # -----------------------
+    # Read data
+    # -----------------------
+    print("📥 Reading training data (may take time)...")
+    df = td.read()
 
-    response = session.get(
-        OPEN_METEO_URL,
-        params=params,
-        timeout=30
-    )
-    response.raise_for_status()
+    print(f"📈 Training rows: {df.shape[0]}")
 
-    data = response.json()
+    if df.shape[0] < 500:
+        print("⚠️ Not enough data to train. Skipping.")
+        return
 
-    if "hourly" not in data:
-        return pd.DataFrame()
+    df = df.sort_values("timestamp").reset_index(drop=True)
 
-    df = pd.DataFrame(data["hourly"])
+    # -----------------------
+    # Train → Evaluate → Save
+    # -----------------------
+    models, metrics = train_models(df)
+    evaluate_models(metrics)
+    save_models(models, metrics)
 
-    # ✅ Correct timestamp
-    df["timestamp"] = pd.to_datetime(df["time"], utc=True)
+    print("✅ Daily training pipeline finished successfully")
 
-    # ✅ Hourly event_id
-    df["event_id"] = df["timestamp"].dt.strftime("%Y%m%d%H")
 
-    # cleanup
-    df.drop(columns=["time"], inplace=True)
-
-    return df
+if __name__ == "__main__":
+    main()
