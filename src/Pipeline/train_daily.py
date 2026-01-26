@@ -36,54 +36,49 @@ def main():
     # -----------------------
     # Feature View
     # -----------------------
-    print("🧠 Fetching / creating Feature View...")
-    try:
-        fv = fs.get_feature_view(
-            name="karachi_air_quality_fv",
-            version=1
-        )
-        print("📊 Using existing Feature View")
-    except:
-        fv = fs.create_feature_view(
-            name="karachi_air_quality_fv",
-            version=1,
-            query=fg.select_all(),
-            labels=["aqi"],
-            description="AQI feature view for training"
-        )
-        print("🆕 Feature View created")
+    print("🧠 Creating/Fetching Feature View...")
+    
+    # Use get_or_create_feature_view for safer handling
+    fv = fs.get_or_create_feature_view(
+        name="karachi_air_quality_fv",
+        version=1,
+        query=fg.select_all(),
+        labels=["aqi"],
+        description="AQI feature view for training"
+    )
+    
+    if fv is None:
+        raise RuntimeError("❌ Feature View creation failed")
+    
+    print("✅ Feature View ready")
 
     # -----------------------
-    # Training Dataset
+    # Read Data Directly
     # -----------------------
-    print("📦 Fetching / creating Training Dataset...")
-    try:
-        td = fv.get_training_dataset(version=1)
-    except:
-        td = fv.create_training_dataset(
-            version=1,
-            description="AQI training dataset"
-        )
-
-    # -----------------------
-    # Read data
-    # -----------------------
-    print("📥 Reading training data (may take time)...")
-    df = td.read()
-
-    print(f"📈 Training rows: {df.shape[0]}")
+    print("📥 Reading data from Feature View...")
+    
+    # Read directly from feature view (simpler than training dataset)
+    df = fv.get_batch_data()
+    
+    print(f"📈 Total rows: {df.shape[0]}")
 
     if df.shape[0] < 500:
         print("⚠️ Not enough data to train. Skipping.")
         return
 
+    # Sort by timestamp for time-series split
     df = df.sort_values("timestamp").reset_index(drop=True)
 
     # -----------------------
     # Train → Evaluate → Save
     # -----------------------
+    print("🔧 Training models...")
     models, metrics = train_models(df)
+    
+    print("📊 Evaluating models...")
     evaluate_models(metrics)
+    
+    print("💾 Saving best model...")
     save_models(models, metrics)
 
     print("✅ Daily training pipeline finished successfully")
