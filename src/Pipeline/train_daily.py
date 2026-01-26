@@ -1,11 +1,3 @@
-import os
-os.environ["HOPSWORKS_DISABLE_MODEL_SERVING"] = "1"
-from dotenv import load_dotenv
-load_dotenv()
-
-import hopsworks
-import pandas as pd
-
 from src.models.train_models import train_models
 from src.models.evaluate import evaluate_models
 from src.models.save_model import save_models
@@ -13,46 +5,55 @@ from src.models.save_model import save_models
 def main():
     print("🚀 Starting DAILY training pipeline...")
 
-    # Login to Hopsworks
     project = hopsworks.login(
         api_key_value=os.getenv("HOPSWORKS_API_KEY"),
         project=os.getenv("HOPSWORKS_PROJECT_NAME")
     )
     fs = project.get_feature_store()
 
-    # Read feature group
+    # Get Feature Group
     fg = fs.get_feature_group(
         name="karachi_air_quality",
         version=3
     )
-    print("📥 Reading features from Hopsworks...")
-    
-    td = fg.create_training_data(
-    description="AQI training dataset",
-    version=1
-    )
- 
+
+    # Get or create Feature View
+    try:
+        fv = fs.get_feature_view(
+            name="karachi_air_quality_fv",
+            version=1
+        )
+        print("📊 Using existing Feature View")
+    except:
+        fv = fs.create_feature_view(
+            name="karachi_air_quality_fv",
+            version=1,
+            query=fg.select_all(),
+            labels=["aqi"],
+            description="AQI feature view for training"
+        )
+        print("🆕 Feature View created")
+
+    # Get Training Dataset
+    try:
+        td = fv.get_training_dataset(version=1)
+    except:
+        td = fv.create_training_dataset(
+            description="AQI training dataset",
+            version=1
+        )
+
+    print("📥 Reading training data...")
     df = td.read()
 
-
-    # Minimum rows safety
     if df.shape[0] < 500:
         print("⚠️ Not enough data to train. Skipping.")
         return
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
-    # Train models
     models, metrics = train_models(df)
-
-    # Evaluate models
     evaluate_models(metrics)
-
-    # Save best model
     save_models(models, metrics)
 
     print("✅ Daily training pipeline finished successfully")
-
-
-if __name__ == "__main__":
-    main()
