@@ -16,31 +16,43 @@ def main():
     print("🚀 Starting DAILY training pipeline...")
 
     # -----------------------
-    # Login
+    # Login with retry
     # -----------------------
-    project = hopsworks.login(
-        api_key_value=os.getenv("HOPSWORKS_API_KEY"),
-        project=os.getenv("HOPSWORKS_PROJECT_NAME"),
-    )
+    import time
+    
+    for attempt in range(3):
+        try:
+            project = hopsworks.login(
+                api_key_value=os.getenv("HOPSWORKS_API_KEY"),
+                project=os.getenv("HOPSWORKS_PROJECT_NAME"),
+            )
+            break
+        except Exception as e:
+            if attempt < 2:
+                print(f"⚠️ Login attempt {attempt + 1} failed, retrying...")
+                time.sleep(5)
+            else:
+                raise
+    
     fs = project.get_feature_store()
 
     # -----------------------
-    # Feature Group v3
+    # Feature Group v4
     # -----------------------
-    print("📊 Fetching Feature Group v3...")
+    print("📊 Fetching Feature Group v4...")
     fg = fs.get_feature_group(
         name="karachi_air_quality",
-        version=3
+        version=4
     )
 
     # -----------------------
-    # Feature View v2 (includes aqi)
+    # Feature View v3 (includes aqi)
     # -----------------------
-    print("🧠 Creating/Fetching Feature View v2...")
+    print("🧠 Creating/Fetching Feature View v3...")
     
     fv = fs.get_or_create_feature_view(
         name="karachi_air_quality_fv",
-        version=2,  # ✅ v2 without labels parameter
+        version=3,  
         query=fg.select_all(),
         description="AQI feature view - all columns including aqi for manual train/test split"
     )
@@ -48,7 +60,7 @@ def main():
     if fv is None:
         raise RuntimeError("❌ Feature View creation failed")
     
-    print("✅ Feature View v2 ready")
+    print("✅ Feature View v3 ready")
 
     # -----------------------
     # Read Data

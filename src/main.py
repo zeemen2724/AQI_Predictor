@@ -40,7 +40,7 @@ def main():
 
     fg = fs.get_or_create_feature_group(
     name="karachi_air_quality",
-    version=3,
+    version=4,
     primary_key=["event_id"],
     event_time="timestamp",
     description="Karachi AQI hourly features from Open-Meteo",
@@ -52,7 +52,7 @@ def main():
     # BOOTSTRAP
     # ---------------------------
     if BOOTSTRAP:
-        start = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
+        start = (datetime.utcnow() - timedelta(days=365)).strftime("%Y-%m-%d")
         end = datetime.utcnow().strftime("%Y-%m-%d")
 
         print(f"🆕 Bootstrapping {start} → {end}")
@@ -88,24 +88,30 @@ def main():
     # ---------------------------
     # FEATURES
     # ---------------------------
-
-    last_ts = fg.read().max()["timestamp"]
-    print(f"⏱️ Last timestamp in FS: {last_ts}")
     
-    df_new = df_raw[df_raw["timestamp"] > last_ts]
+    if BOOTSTRAP:
+        df_features = build_features(df_raw)
+    else:
+        last_ts = safe_read(fg)["timestamp"].max()
+        print(f"⏱️ Last timestamp in FS: {last_ts}")
     
-    if df_new.empty:
-        print("🟡 No new data to ingest. Skipping insert.")
-        return
-
-    df_features = build_features(df_raw)
-
+        df_new = df_raw[df_raw["timestamp"] > last_ts]
+    
+        if df_new.empty:
+            print("🟡 No new data to ingest. Skipping insert.")
+            return
+    
+        df_features = build_features(df_new)
+    
     if df_features.empty:
         print("🟡 No features generated")
         return
-
+    
     push_features(fg, df_features)
+    df_features.to_parquet("latest_features.parquet", index=False)
+    
     print("✅ Pipeline finished successfully")
+    
 
 
 if __name__ == "__main__":
