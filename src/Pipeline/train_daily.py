@@ -92,8 +92,9 @@ def main():
     print("📊 Evaluating models...")
     evaluate_models(metrics)
     
-    print("💾 Saving best model...")
+    print("💾 Saving best model (local + registry)...")
     save_models(models, metrics)
+
 
     print("✅ Daily training pipeline finished successfully")
 
