@@ -1086,7 +1086,7 @@ st.dataframe(
 )
 
 st.success("✅ **Best Model: GradientBoosting** (Lowest MAE & RMSE, Highest R²)")
-st.caption("**Training data:** 8870 samples | **Features:** 7 (aqi lags + temporal features)")
+st.caption("**Training data:** 8870 samples")
 
 st.divider()
 
