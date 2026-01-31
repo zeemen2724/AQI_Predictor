@@ -348,6 +348,8 @@ streamlit run app.py
 
 Access at: `http://localhost:8501`
 
+Note: The Streamlit app entry point is `ui/app.py`. The UI uses a dark-themed main area with a fixed right sidebar (30% width) and main content on the left (70%). If you modify custom CSS selectors in `ui/app.py`, verify they still match Streamlit's DOM after Streamlit upgrades.
+
 ---
 
 ## 🛠️ Development
@@ -384,6 +386,32 @@ pytest tests/
 3. Retrain models with new features
 4. Test with evaluation metrics
 5. Deploy via pipeline
+
+---
+
+## 🚀 Deployment (Streamlit Cloud)
+
+When deploying to Streamlit Cloud (app.streamlit.io) use the following checklist:
+
+- **Repository & Main File**: Set the "Main file path" to `ui/app.py` (that's the Streamlit entrypoint).
+- **Requirements**: Ensure a top-level `requirements.txt` includes all dependencies (`streamlit`, `hopsworks`, `pandas`, `numpy`, `scikit-learn`, `joblib`, `python-dotenv`, `plotly`, etc.). Streamlit Cloud installs packages from this file.
+- **Secrets & Environment Variables**: Add required secrets in the Streamlit Cloud app settings (do NOT store them in the repo). Common keys:
+   - `HOPSWORKS_API_KEY`
+   - `HOPSWORKS_PROJECT_NAME`
+   - Any other external API keys used by your code
+
+- **Filesystem note**: Streamlit Cloud provides an ephemeral filesystem. Files written to `artifacts/` will not persist across deploys or restarts. If you need persistent storage for models or feature data, use external storage (Hopsworks feature store, S3, GCS, or a model registry).
+- **Python Version**: If you require a specific Python minor version, set it in Advanced Settings on Streamlit Cloud.
+- **App URL**: You may set a custom app URL on Streamlit Cloud; the UI will indicate availability.
+
+When troubleshooting deploy failures, check the live deploy logs for missing packages, import errors, or failing network calls to Hopsworks.
+
+---
+
+## 🔁 Notes about Feature Store & Artifacts
+
+- The feature group used by the pipeline is `karachi_air_quality` (versioned). Confirm consistency between `src/main.py` and `src/feature_store/push_to_hopsworks.py` if you change the name or version.
+- Model artifacts are stored in the repository `artifacts/` for local testing. For production workflows prefer a model registry or cloud storage to avoid dependency on the repo filesystem.
 
 ---
 
