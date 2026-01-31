@@ -21,7 +21,6 @@ load_dotenv()
 
 # ===========================
 # ✅ FIX: Import the CORRECT recursive forecast from utils.py
-#    (the old inline generate_forecast() in this file has been removed)
 # ===========================
 from utils import generate_forecast
 
@@ -512,33 +511,59 @@ def get_health_recommendation(aqi_value: float) -> str:
     else:
         return "Air quality is acceptable for most people. Enjoy outdoor activities!"
 
-@st.cache_data
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def load_historical_data():
-    """Load historical AQI data from Hopsworks Feature Store."""
-    try:
-        project = hopsworks.login(api_key_value=os.getenv("HOPSWORKS_API_KEY"))
-        fs = project.get_feature_store()
-        
-        fg = fs.get_feature_group("karachi_air_quality", version=5)
-        df = fg.read()
-        
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        
-        if "hour" not in df.columns:
-            df["hour"] = df["timestamp"].dt.hour
-        if "day" not in df.columns:
-            df["day"] = df["timestamp"].dt.day
-        if "month" not in df.columns:
-            df["month"] = df["timestamp"].dt.month
-        if "weekday" not in df.columns:
-            df["weekday"] = df["timestamp"].dt.weekday
-        
-        return df.sort_values("timestamp")
-    except Exception as e:
-        st.error(f"⚠️ Unable to load air quality data: {str(e)}")
+    """Load historical AQI data from Hopsworks Feature Store with timeout."""
+    import threading
+    
+    result = {"data": None, "error": None}
+    
+    def fetch_data():
+        try:
+            project = hopsworks.login(api_key_value=os.getenv("HOPSWORKS_API_KEY"))
+            fs = project.get_feature_store()
+            
+            fg = fs.get_feature_group("karachi_air_quality", version=5)
+            df = fg.read()
+            
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            
+            if "hour" not in df.columns:
+                df["hour"] = df["timestamp"].dt.hour
+            if "day" not in df.columns:
+                df["day"] = df["timestamp"].dt.day
+            if "month" not in df.columns:
+                df["month"] = df["timestamp"].dt.month
+            if "weekday" not in df.columns:
+                df["weekday"] = df["timestamp"].dt.weekday
+            
+            result["data"] = df.sort_values("timestamp")
+        except Exception as e:
+            result["error"] = str(e)
+    
+    # Start data fetching in a thread with 60 second timeout
+    thread = threading.Thread(target=fetch_data)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=60)
+    
+    if thread.is_alive():
+        st.error("⚠️ Hopsworks connection timed out after 60 seconds. Please check your API key and network.")
+        st.info("💡 **Troubleshooting:**\n- Check Hopsworks API key in Streamlit secrets\n- Verify network connectivity\n- Try refreshing the page")
         st.stop()
+    
+    if result["error"]:
+        st.error(f"⚠️ Unable to load air quality data: {result['error']}")
+        st.info("💡 **Troubleshooting:**\n- Check Hopsworks API key in Streamlit secrets\n- Verify network connectivity\n- Check if feature group exists")
+        st.stop()
+    
+    if result["data"] is None:
+        st.error("⚠️ Failed to load data - unknown error")
+        st.stop()
+    
+    return result["data"]
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_model_metadata():
     """Get model metadata from artifacts directory."""
     metadata = {
@@ -580,7 +605,7 @@ def get_model_metadata():
     
     return metadata
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_model():
     """Load the trained model from artifacts directory."""
     try:
@@ -597,18 +622,54 @@ def load_model():
         return None
 
 # ===========================
+# SHOW INITIAL LOADING STATE
+# ===========================
+loading_placeholder = st.empty()
+with loading_placeholder.container():
+    st.markdown("""
+    <div style='text-align: center; padding: 3rem;'>
+        <h2>🌫️ Karachi AQI Predictor</h2>
+        <p>Loading air quality data...</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("🔑 Connecting to Hopsworks...")
+    progress_bar.progress(25)
+
+# ===========================
 # LOAD DATA
 # ===========================
-with st.spinner('🔄 Loading air quality data...'):
+try:
     historical_df = load_historical_data()
+    progress_bar.progress(60)
+    status_text.text("📊 Loading model metadata...")
+    
     model_metadata = get_model_metadata()
+    progress_bar.progress(80)
+    status_text.text("🤖 Loading prediction model...")
+    
     model = load_model()
+    progress_bar.progress(100)
+    status_text.text("✅ Ready!")
+    
+    # Clear loading screen
+    import time
+    time.sleep(0.5)
+    loading_placeholder.empty()
+    
+except Exception as e:
+    loading_placeholder.empty()
+    st.error(f"❌ Failed to initialize app: {str(e)}")
+    st.stop()
 
-# Get recent data (last 7 days) - MUST BE BEFORE SIDEBAR
+# Get recent data (last 7 days) - MUST BE AFTER LOADING
 recent_df = historical_df.tail(24 * 7)
 latest_data = historical_df.iloc[-1]
 
-# Calculate data freshness - MUST BE BEFORE SIDEBAR
+# Calculate data freshness - MUST BE AFTER LOADING
 latest_ts = pd.to_datetime(latest_data['timestamp'])
 now_aware = datetime.now(timezone.utc) if latest_ts.tzinfo else datetime.now()
 data_age_hours = (now_aware - latest_ts).total_seconds() / 3600
@@ -784,9 +845,6 @@ if model is not None:
 st.markdown("<br>", unsafe_allow_html=True)
 
 if model is not None:
-    # ✅ This now calls utils.generate_forecast() which uses the correct
-    #    recursive logic with aqi_lag_1, aqi_lag_24, aqi_lag_48 features
-    #    that match what the model was actually trained on.
     forecast_df = generate_forecast(historical_df, model, days=3)
     
     if forecast_df is not None and not forecast_df.empty:
@@ -1069,7 +1127,6 @@ metrics_data = {
     "MAE": [6.9263, 6.9418, 6.5196],
     "RMSE": [10.7103, 10.2606, 9.7755],
     "R²": [0.8809, 0.8907, 0.9008]
-
 }
 metrics_df = pd.DataFrame(metrics_data)
 
