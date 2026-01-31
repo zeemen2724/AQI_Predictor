@@ -37,22 +37,22 @@ def main():
     fs = project.get_feature_store()
 
     # -----------------------
-    # Feature Group v4
+    # Feature Group v5
     # -----------------------
-    print("📊 Fetching Feature Group v4...")
+    print("📊 Fetching Feature Group v5...")
     fg = fs.get_feature_group(
         name="karachi_air_quality",
-        version=4
+        version=5
     )
 
     # -----------------------
-    # Feature View v3 (includes aqi)
+    # Feature View v4 (includes aqi)
     # -----------------------
-    print("🧠 Creating/Fetching Feature View v3...")
+    print("🧠 Creating/Fetching Feature View v4...")
     
     fv = fs.get_or_create_feature_view(
-        name="karachi_air_quality_fv",
-        version=3,  
+        name="karachi_air_quality_fv_v2",
+        version=4,  
         query=fg.select_all(),
         description="AQI feature view - all columns including aqi for manual train/test split"
     )
@@ -60,7 +60,7 @@ def main():
     if fv is None:
         raise RuntimeError("❌ Feature View creation failed")
     
-    print("✅ Feature View v3 ready")
+    print("✅ Feature View v4 ready")
 
     # -----------------------
     # Read Data

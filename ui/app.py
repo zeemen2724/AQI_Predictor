@@ -20,6 +20,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 load_dotenv()
 
 # ===========================
+# ✅ FIX: Import the CORRECT recursive forecast from utils.py
+#    (the old inline generate_forecast() in this file has been removed)
+# ===========================
+from utils import generate_forecast
+
+# ===========================
 # PAGE CONFIGURATION
 # ===========================
 st.set_page_config(
@@ -413,13 +419,10 @@ st.markdown("""
 # ===========================
 # JS: Lock sidebar open & kill all toggle buttons permanently
 # ===========================
-# CSS !important LOSES to Streamlit's inline styles which are re-injected via JS
-# on every rerender. A MutationObserver is the only way to override them reliably.
 st.markdown("""
 <script>
 (function() {
     function fixSidebar() {
-        // 1) Lock the sidebar open, forced right, no transform
         var sidebar = document.querySelector('[data-testid="stSidebar"]');
         if (sidebar) {
             sidebar.style.transform   = 'none';
@@ -436,7 +439,6 @@ st.markdown("""
             sidebar.style.zIndex      = '999999';
         }
 
-        // 2) Hide every known toggle/collapse/minimize/maximize selector
         var selectors = [
             '[data-testid="collapsedControl"]',
             '[data-testid="collapsibleButton"]',
@@ -458,8 +460,6 @@ st.markdown("""
             });
         });
 
-        // 3) Catch any small SVG chevron button that lives OUTSIDE the sidebar
-        //    (Streamlit renders the collapse toggle as a sibling, not a child)
         document.querySelectorAll('button').forEach(function(btn) {
             if (btn.querySelector('svg') && !btn.closest('[data-testid="stSidebar"]')) {
                 var rect = btn.getBoundingClientRect();
@@ -470,10 +470,8 @@ st.markdown("""
         });
     }
 
-    // Run once right away
     fixSidebar();
 
-    // Re-run every time Streamlit touches the DOM (style or class changes)
     var observer = new MutationObserver(function() { fixSidebar(); });
     observer.observe(document.documentElement, {
         childList: true,
@@ -521,14 +519,11 @@ def load_historical_data():
         project = hopsworks.login(api_key_value=os.getenv("HOPSWORKS_API_KEY"))
         fs = project.get_feature_store()
         
-        # Get feature group
-        fg = fs.get_feature_group("karachi_air_quality", version=4)
+        fg = fs.get_feature_group("karachi_air_quality", version=5)
         df = fg.read()
         
-        # Convert timestamp and extract time features
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         
-        # Ensure required columns exist
         if "hour" not in df.columns:
             df["hour"] = df["timestamp"].dt.hour
         if "day" not in df.columns:
@@ -555,7 +550,6 @@ def get_model_metadata():
         "status": "✅ Model Loaded"
     }
     
-    # Try to load metrics from artifacts
     try:
         project_root = Path(__file__).parent.parent
         metrics_path = project_root / "artifacts" / "metrics.json"
@@ -564,7 +558,6 @@ def get_model_metadata():
             with open(metrics_path, 'r') as f:
                 loaded_metrics = json.load(f)
                 
-                # Check if metrics have model-specific nested structure
                 if 'GradientBoosting' in loaded_metrics:
                     gb_metrics = loaded_metrics['GradientBoosting']
                     metadata.update({
@@ -574,7 +567,6 @@ def get_model_metadata():
                         "best_model": loaded_metrics.get('best_model', 'GradientBoosting')
                     })
                 else:
-                    # Direct structure
                     metadata.update({
                         "mae": loaded_metrics.get('mae', metadata['mae']),
                         "rmse": loaded_metrics.get('rmse', metadata['rmse']),
@@ -604,89 +596,6 @@ def load_model():
         st.warning(f"⚠️ Could not load model: {str(e)}")
         return None
 
-def generate_forecast(historical_df, model, days=3):
-    """Generate AQI forecast for next N days using the trained model."""
-    try:
-        if model is None:
-            raise ValueError("Model not available")
-        
-        predictions = []
-        last_timestamp = pd.to_datetime(historical_df['timestamp'].iloc[-1])
-        
-        # Features used in training - filter for available columns
-        all_features = ['pm2_5', 'pm10', 'carbon_monoxide', 'nitrogen_dioxide',
-                       'sulphur_dioxide', 'ozone', 'hour', 'day', 'month', 'weekday',
-                       'pm2_5_lag1', 'pm2_5_lag2', 'pm2_5_roll3']
-        
-        available_features = [f for f in all_features if f in historical_df.columns]
-        
-        # Get last row for feature engineering
-        last_row = historical_df.iloc[-1].copy()
-        
-        # Generate predictions for each hour
-        for hour_num in range(1, days * 24 + 1):
-            future_time = last_timestamp + timedelta(hours=hour_num)
-            
-            # Create new row
-            new_row = last_row.copy()
-            new_row['timestamp'] = future_time
-            new_row['hour'] = future_time.hour
-            new_row['day'] = future_time.day
-            new_row['month'] = future_time.month
-            new_row['weekday'] = future_time.weekday()
-            
-            # Update lag features with previous predictions
-            if len(predictions) >= 1 and 'pm2_5_lag1' in available_features:
-                new_row['pm2_5_lag1'] = predictions[-1]['aqi_predicted'] * 0.4
-            if len(predictions) >= 2 and 'pm2_5_lag2' in available_features:
-                new_row['pm2_5_lag2'] = predictions[-2]['aqi_predicted'] * 0.4
-            if len(predictions) >= 3 and 'pm2_5_roll3' in available_features:
-                new_row['pm2_5_roll3'] = np.mean([p['aqi_predicted'] for p in predictions[-3:]]) * 0.4
-            
-            # Extract features that exist
-            try:
-                X = new_row[available_features].values.reshape(1, -1)
-                pred = model.predict(X)[0]
-            except Exception:
-                # Fallback to simple average
-                pred = historical_df['aqi'].tail(24).mean()
-            
-            predictions.append({
-                'timestamp': future_time,
-                'aqi_predicted': max(0, min(500, pred))
-            })
-            
-            last_row = new_row
-        
-        return pd.DataFrame(predictions)
-        
-    except Exception as e:
-        st.warning(f"Using simplified forecast: {str(e)}")
-        # Fallback: use hourly patterns
-        predictions = []
-        last_timestamp = pd.to_datetime(historical_df['timestamp'].iloc[-1])
-        
-        for hour_num in range(1, days * 24 + 1):
-            future_time = last_timestamp + timedelta(hours=hour_num)
-            hour_of_day = future_time.hour
-            
-            # Use historical average for this hour
-            if 'hour' in historical_df.columns:
-                same_hour_data = historical_df[historical_df['hour'] == hour_of_day]
-                if len(same_hour_data) > 0:
-                    pred = same_hour_data['aqi'].mean()
-                else:
-                    pred = historical_df['aqi'].mean()
-            else:
-                pred = historical_df['aqi'].mean()
-            
-            predictions.append({
-                'timestamp': future_time,
-                'aqi_predicted': max(0, min(500, pred))
-            })
-        
-        return pd.DataFrame(predictions)
-
 # ===========================
 # LOAD DATA
 # ===========================
@@ -711,7 +620,6 @@ with st.sidebar:
     st.markdown("### 🔄 Pipeline Status")
     st.markdown("---")
     
-    # Feature Pipeline Status
     st.markdown("**📊 Data Ingestion**")
     st.caption("Runs: Hourly")
     latest_timestamp = pd.to_datetime(historical_df['timestamp'].iloc[-1])
@@ -725,12 +633,10 @@ with st.sidebar:
     else:
         st.error(f"❌ {time_since_update:.1f}h ago", icon="❌")
     
-    # Training Pipeline Status
     st.markdown("**🤖 Training Pipeline**")
     st.caption("Runs: Daily @ 8:00 AM")
     st.info("Scheduled", icon="📊")
     
-    # Model Status
     st.markdown("**🎯 Active Model**")
     if model is not None:
         st.success(f"{model_metadata['best_model']}", icon="✅")
@@ -747,7 +653,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Data freshness info
     st.markdown("**📅 Data Information**")
     st.caption(f"Updated: {latest_data['timestamp'].strftime('%b %d, %I:%M %p')}")
     st.caption(f"Age: {data_age_hours:.1f}h")
@@ -874,15 +779,17 @@ elif current_aqi > 100:
 st.markdown("<div class='section-header'>🔮 3-Day Forecast</div>", unsafe_allow_html=True)
 
 if model is not None:
-    st.info(f"📊 Predictions from {model_metadata['best_model']} (MAE: {model_metadata['mae']:.2f})")
+    st.info(f"📊 Predictions from {model_metadata['best_model']} (MAE: {model_metadata['mae']:.2f}) — Recursive multi-step forecasting")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 if model is not None:
+    # ✅ This now calls utils.generate_forecast() which uses the correct
+    #    recursive logic with aqi_lag_1, aqi_lag_24, aqi_lag_48 features
+    #    that match what the model was actually trained on.
     forecast_df = generate_forecast(historical_df, model, days=3)
     
-    if forecast_df is not None:
-        # Create forecast visualization
+    if forecast_df is not None and not forecast_df.empty:
         col_left, col_right = st.columns([2, 1])
         
         with col_left:
@@ -902,7 +809,6 @@ if model is not None:
                          labels={'value': 'AQI', 'timestamp': 'Date & Time'},
                          color_discrete_map={'Historical': '#667eea', 'Forecast': '#f39c12'})
             
-            # Add AQI threshold lines
             fig.add_hline(y=50, line_dash="dash", line_color="green", opacity=0.3,
                          annotation_text="Good")
             fig.add_hline(y=100, line_dash="dash", line_color="yellow", opacity=0.3,
@@ -924,7 +830,6 @@ if model is not None:
         with col_right:
             st.markdown("#### 📅 Next 3 Days")
             
-            # Show daily average forecasts
             for day in range(1, 4):
                 day_start = day - 1
                 day_data = forecast_df.iloc[day_start * 24:(day_start + 1) * 24]
@@ -947,7 +852,9 @@ if model is not None:
                 </div>
                 """, unsafe_allow_html=True)
             
-            st.caption(f"Model: {model_metadata['best_model']}")
+            st.caption(f"Model: {model_metadata['best_model']} | Recursive forecasting")
+    else:
+        st.warning("⚠️ Forecast returned empty. Check that historical_df has an 'aqi' column and at least 49 rows.")
 else:
     st.warning("⚠️ Prediction model not available. Please train the model first.")
     st.info("💡 Run: `python -m src.Pipeline.train_daily` to train the model.")
@@ -1017,7 +924,6 @@ with tab1:
     
     st.plotly_chart(fig_hist, use_container_width=True)
     
-    # Stats
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("📊 Weekly Average", f"{recent_df['aqi'].mean():.0f}")
@@ -1160,9 +1066,10 @@ st.markdown("#### 🏆 Model Comparison")
 
 metrics_data = {
     "Model": ["LinearRegression", "RandomForest", "GradientBoosting"],
-    "MAE": [5.3931, 0.0992, 0.2776],
-    "RMSE": [12.1838, 2.0729, 2.0713],
-    "R²": [0.9186, 0.9976, 0.9976]
+    "MAE": [6.9263, 6.9418, 6.5196],
+    "RMSE": [10.7103, 10.2606, 9.7755],
+    "R²": [0.8809, 0.8907, 0.9008]
+
 }
 metrics_df = pd.DataFrame(metrics_data)
 
@@ -1179,7 +1086,7 @@ st.dataframe(
 )
 
 st.success("✅ **Best Model: GradientBoosting** (Lowest MAE & RMSE, Highest R²)")
-st.caption("**Training data:** 8870 samples | **Features:** 16 (pollutants + temporal + lag features)")
+st.caption("**Training data:** 8870 samples | **Features:** 7 (aqi lags + temporal features)")
 
 st.divider()
 

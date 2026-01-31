@@ -2,15 +2,21 @@ import pandas as pd
 
 
 def compute_aqi_pm25(pm25):
-    if pm25 <= 12:
-        return pm25 * 50 / 12
-    elif pm25 <= 35.4:
-        return ((pm25 - 12.1) * (100 - 51) / (35.4 - 12.1)) + 51
-    elif pm25 <= 55.4:
-        return ((pm25 - 35.5) * (150 - 101) / (55.4 - 35.5)) + 101
-    else:
-        return 200
-
+    # EPA standard AQI breakpoints for PM2.5 (24-hr, but works for hourly too)
+    breakpoints = [
+        (0,    12.0,   0,   50),
+        (12.1, 35.4,  51,  100),
+        (35.5, 55.4, 101,  150),
+        (55.5, 150.4, 151, 200),
+        (150.5, 250.4, 201, 300),
+        (250.5, 350.4, 301, 400),
+        (350.5, 500.4, 401, 500),
+    ]
+    for lo, hi, aqi_lo, aqi_hi in breakpoints:
+        if lo <= pm25 <= hi:
+            return aqi_lo + (pm25 - lo) * (aqi_hi - aqi_lo) / (hi - lo)
+    # If somehow above 500.4, scale linearly beyond 500
+    return 500 + (pm25 - 500.4)
 
 def build_features(df):
     df = df.copy()
