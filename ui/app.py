@@ -513,7 +513,7 @@ def get_health_recommendation(aqi_value: float) -> str:
 
 @st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def load_historical_data():
-    """Load historical AQI data from Hopsworks Feature Store with timeout and retry."""
+    """Load historical AQI data from Hopsworks Feature Store using Feature View."""
     import threading
     import time
     
@@ -525,7 +525,6 @@ def load_historical_data():
         
         def fetch_data():
             try:
-                # Add small delay between retries
                 if attempt > 0:
                     time.sleep(2)
                 
@@ -535,26 +534,26 @@ def load_historical_data():
                 )
                 fs = project.get_feature_store()
                 
-                fg = fs.get_feature_group("karachi_air_quality", version=5)
-                
-                # Try multiple read methods
+                # Try Feature View first (same as training pipeline)
                 df = None
                 try:
-                    # Method 1: Standard read (uses Query Service)
-                    df = fg.read()
+                    fv = fs.get_feature_view(
+                        name="karachi_air_quality_fv_v2",
+                        version=4
+                    )
+                    df = fv.get_batch_data()
                 except Exception as e1:
+                    # Fallback to Feature Group
                     try:
-                        # Method 2: Direct read with limit (fallback)
-                        df = fg.read(online=False)
+                        fg = fs.get_feature_group("karachi_air_quality", version=5)
+                        # Try getting feature view query
+                        query = fg.select_all()
+                        df = query.read(online=False, dataframe_type="pandas")
                     except Exception as e2:
-                        try:
-                            # Method 3: Select all (another fallback)
-                            df = fg.select_all().read()
-                        except Exception as e3:
-                            raise Exception(f"All read methods failed. Query Service: {str(e1)}, Direct: {str(e2)}, Select: {str(e3)}")
+                        raise Exception(f"Feature View failed: {str(e1)} | Feature Group failed: {str(e2)}")
                 
                 if df is None or df.empty:
-                    raise Exception("Feature group returned empty data")
+                    raise Exception("No data returned from Hopsworks")
                 
                 df["timestamp"] = pd.to_datetime(df["timestamp"])
                 
@@ -571,45 +570,60 @@ def load_historical_data():
             except Exception as e:
                 result["error"] = str(e)
         
-        # Start data fetching in a thread
         thread = threading.Thread(target=fetch_data)
         thread.daemon = True
         thread.start()
         thread.join(timeout=timeout_seconds)
         
-        # Success - return data
         if result["data"] is not None:
             return result["data"]
         
-        # Error occurred
         if result["error"]:
             if attempt < max_retries - 1:
-                st.warning(f"⚠️ Attempt {attempt + 1} failed: {result['error']}. Retrying...")
+                st.warning(f"⚠️ Attempt {attempt + 1} failed: {result['error'][:200]}... Retrying...")
                 continue
             else:
                 st.error(f"⚠️ Unable to load air quality data after {max_retries} attempts")
                 st.code(result['error'], language="text")
-                st.info("""
-                💡 **Troubleshooting:**
-                - Check if feature group 'karachi_air_quality' version 5 exists in Hopsworks
-                - Verify your API key has read permissions
-                - Check Hopsworks Query Service status
-                - Try manually testing the feature group in Hopsworks UI
-                - Check if there's data in the feature group
-                """)
+                
+                with st.expander("🔍 Possible Solutions"):
+                    st.markdown("""
+                    **This is a Hopsworks API/Query Service issue. Try:**
+                    
+                    1. **Check Hopsworks Status**
+                       - Go to your Hopsworks project dashboard
+                       - Verify the feature group exists and has data
+                       - Check if Query Service is enabled
+                    
+                    2. **API Key Permissions**
+                       - Make sure your API key has **read** permissions
+                       - Regenerate the API key if needed
+                    
+                    3. **Alternative: Use CSV Export**
+                       - Export feature group data as CSV from Hopsworks
+                       - Upload to GitHub repo
+                       - Load from CSV as fallback
+                    
+                    4. **Check Hopsworks Logs**
+                       - Look for errors in Hopsworks UI
+                       - Query Service might be down/overloaded
+                    
+                    5. **Verify Feature Group Version**
+                       - Make sure version 5 exists
+                       - Check if data was actually ingested
+                    """)
+                
                 st.stop()
         
-        # Timeout occurred
         if thread.is_alive():
             if attempt < max_retries - 1:
-                st.warning(f"⚠️ Attempt {attempt + 1} timed out after {timeout_seconds}s. Retrying...")
+                st.warning(f"⚠️ Attempt {attempt + 1} timed out. Retrying...")
                 continue
             else:
-                st.error(f"⚠️ Hopsworks connection timed out after {max_retries} attempts ({timeout_seconds}s each).")
-                st.info("💡 **Troubleshooting:**\n- Hopsworks may be slow or down - try again in a few minutes\n- Check Streamlit Cloud logs for network issues")
+                st.error(f"⚠️ Connection timed out after {max_retries} attempts")
                 st.stop()
     
-    st.error("⚠️ Failed to load data - unknown error")
+    st.error("⚠️ Failed to load data")
     st.stop()
 
 @st.cache_resource(show_spinner=False)
