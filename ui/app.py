@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import hopsworks
 import os
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 import numpy as np
 import joblib
 import json
@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# load_dotenv()
+load_dotenv()
 
 # ===========================
 # ✅ FIX: Import the CORRECT recursive forecast from utils.py
@@ -471,6 +471,13 @@ st.markdown("""
 
     fixSidebar();
 
+    var observer = new MutationObserver(function() { fixSidebar(); });
+    observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
 })();
 </script>
 """, unsafe_allow_html=True)
@@ -504,44 +511,120 @@ def get_health_recommendation(aqi_value: float) -> str:
     else:
         return "Air quality is acceptable for most people. Enjoy outdoor activities!"
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def load_historical_data():
-    try:
-        project = hopsworks.login(
-            api_key_value=st.secrets["HOPSWORKS_API_KEY"],
-            project=st.secrets["HOPSWORKS_PROJECT_NAME"]
-        )
-
-        fs = project.get_feature_store()
-
-        fv = fs.get_feature_view(
-            name="karachi_air_quality_fv_v2",
-            version=4
-        )
-
-        df = fv.get_batch_data()
-
-        if df is None or df.empty:
-            raise Exception("No data returned from Hopsworks")
-
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-        if "hour" not in df.columns:
-            df["hour"] = df["timestamp"].dt.hour
-        if "day" not in df.columns:
-            df["day"] = df["timestamp"].dt.day
-        if "month" not in df.columns:
-            df["month"] = df["timestamp"].dt.month
-        if "weekday" not in df.columns:
-            df["weekday"] = df["timestamp"].dt.weekday
-
-        return df.sort_values("timestamp")
-
-    except Exception as e:
-        st.error("❌ Failed to load data from Hopsworks")
-        st.code(str(e))
-        st.stop()
-
+    """Load historical AQI data from Hopsworks Feature Store using Feature View."""
+    import threading
+    import time
+    
+    max_retries = 3
+    timeout_seconds = 90
+    
+    for attempt in range(max_retries):
+        result = {"data": None, "error": None}
+        
+        def fetch_data():
+            try:
+                if attempt > 0:
+                    time.sleep(2)
+                
+                project = hopsworks.login(
+                    api_key_value=os.getenv("HOPSWORKS_API_KEY"),
+                    project=os.getenv("HOPSWORKS_PROJECT_NAME")
+                )
+                fs = project.get_feature_store()
+                
+                # Try Feature View first (same as training pipeline)
+                df = None
+                try:
+                    fv = fs.get_feature_view(
+                        name="karachi_air_quality_fv_v2",
+                        version=4
+                    )
+                    df = fv.get_batch_data()
+                except Exception as e1:
+                    # Fallback to Feature Group
+                    try:
+                        fg = fs.get_feature_group("karachi_air_quality", version=5)
+                        # Try getting feature view query
+                        query = fg.select_all()
+                        df = query.read(online=False, dataframe_type="pandas")
+                    except Exception as e2:
+                        raise Exception(f"Feature View failed: {str(e1)} | Feature Group failed: {str(e2)}")
+                
+                if df is None or df.empty:
+                    raise Exception("No data returned from Hopsworks")
+                
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                
+                if "hour" not in df.columns:
+                    df["hour"] = df["timestamp"].dt.hour
+                if "day" not in df.columns:
+                    df["day"] = df["timestamp"].dt.day
+                if "month" not in df.columns:
+                    df["month"] = df["timestamp"].dt.month
+                if "weekday" not in df.columns:
+                    df["weekday"] = df["timestamp"].dt.weekday
+                
+                result["data"] = df.sort_values("timestamp")
+            except Exception as e:
+                result["error"] = str(e)
+        
+        thread = threading.Thread(target=fetch_data)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+        
+        if result["data"] is not None:
+            return result["data"]
+        
+        if result["error"]:
+            if attempt < max_retries - 1:
+                st.warning(f"⚠️ Attempt {attempt + 1} failed: {result['error'][:200]}... Retrying...")
+                continue
+            else:
+                st.error(f"⚠️ Unable to load air quality data after {max_retries} attempts")
+                st.code(result['error'], language="text")
+                
+                with st.expander("🔍 Possible Solutions"):
+                    st.markdown("""
+                    **This is a Hopsworks API/Query Service issue. Try:**
+                    
+                    1. **Check Hopsworks Status**
+                       - Go to your Hopsworks project dashboard
+                       - Verify the feature group exists and has data
+                       - Check if Query Service is enabled
+                    
+                    2. **API Key Permissions**
+                       - Make sure your API key has **read** permissions
+                       - Regenerate the API key if needed
+                    
+                    3. **Alternative: Use CSV Export**
+                       - Export feature group data as CSV from Hopsworks
+                       - Upload to GitHub repo
+                       - Load from CSV as fallback
+                    
+                    4. **Check Hopsworks Logs**
+                       - Look for errors in Hopsworks UI
+                       - Query Service might be down/overloaded
+                    
+                    5. **Verify Feature Group Version**
+                       - Make sure version 5 exists
+                       - Check if data was actually ingested
+                    """)
+                
+                st.stop()
+        
+        if thread.is_alive():
+            if attempt < max_retries - 1:
+                st.warning(f"⚠️ Attempt {attempt + 1} timed out. Retrying...")
+                continue
+            else:
+                st.error(f"⚠️ Connection timed out after {max_retries} attempts")
+                st.stop()
+    
+    st.error("⚠️ Failed to load data")
+    st.stop()
 
 @st.cache_resource(show_spinner=False)
 def get_model_metadata():
@@ -601,35 +684,49 @@ def load_model():
         st.warning(f"⚠️ Could not load model: {str(e)}")
         return None
 
+# ===========================
+# SHOW INITIAL LOADING STATE
+# ===========================
+loading_placeholder = st.empty()
+with loading_placeholder.container():
+    st.markdown("""
+    <div style='text-align: center; padding: 3rem;'>
+        <h2>🌫️ Karachi AQI Predictor</h2>
+        <p>Loading air quality data...</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("🔑 Connecting to Hopsworks...")
+    progress_bar.progress(25)
 
 # ===========================
 # LOAD DATA
 # ===========================
-if "loaded" not in st.session_state:
-    st.session_state.loaded = False
-
-if not st.session_state.loaded:
-    st.markdown("""
-    <div style='text-align: center; padding: 3rem;'>
-        <h2>🌫️ Karachi AQI Predictor</h2>
-        <p>Click below to load live data</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("🚀 Load Live AQI Data"):
-        with st.spinner("Connecting to Hopsworks..."):
-            st.session_state.historical_df = load_historical_data()
-            st.session_state.model_metadata = get_model_metadata()
-            st.session_state.model = load_model()
-            st.session_state.loaded = True
-            st.rerun()
-    else:
-        st.stop()
-else:
-    historical_df = st.session_state.historical_df
-    model_metadata = st.session_state.model_metadata
-    model = st.session_state.model
-
+try:
+    historical_df = load_historical_data()
+    progress_bar.progress(60)
+    status_text.text("📊 Loading model metadata...")
+    
+    model_metadata = get_model_metadata()
+    progress_bar.progress(80)
+    status_text.text("🤖 Loading prediction model...")
+    
+    model = load_model()
+    progress_bar.progress(100)
+    status_text.text("✅ Ready!")
+    
+    # Clear loading screen
+    import time
+    time.sleep(0.5)
+    loading_placeholder.empty()
+    
+except Exception as e:
+    loading_placeholder.empty()
+    st.error(f"❌ Failed to initialize app: {str(e)}")
+    st.stop()
 
 # Get recent data (last 7 days) - MUST BE AFTER LOADING
 recent_df = historical_df.tail(24 * 7)
@@ -689,10 +786,9 @@ with st.sidebar:
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
-       del st.session_state["historical_df"]
-       st.session_state.loaded = False
-       st.rerun()
-
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
 
 # Handle future timestamps (timezone bug)
 if data_age_hours < -1:
