@@ -511,120 +511,106 @@ def get_health_recommendation(aqi_value: float) -> str:
     else:
         return "Air quality is acceptable for most people. Enjoy outdoor activities!"
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
+# ===========================
+# ✅ FIXED: Load historical data with better error handling
+# ===========================
+@st.cache_data(ttl=1800, show_spinner=False)
 def load_historical_data():
-    """Load historical AQI data from Hopsworks Feature Store using Feature View."""
-    import threading
-    import time
+    """Load historical AQI data from Hopsworks Feature Store - FIXED VERSION."""
     
-    max_retries = 3
-    timeout_seconds = 90
-    
-    for attempt in range(max_retries):
-        result = {"data": None, "error": None}
+    try:
+        # Get API credentials - try Streamlit secrets first, then .env
+        try:
+            api_key = st.secrets["HOPSWORKS_API_KEY"]
+            project_name = st.secrets["HOPSWORKS_PROJECT_NAME"]
+        except (FileNotFoundError, KeyError):
+            api_key = os.getenv("HOPSWORKS_API_KEY")
+            project_name = os.getenv("HOPSWORKS_PROJECT_NAME")
         
-        def fetch_data():
-            try:
-                if attempt > 0:
-                    time.sleep(2)
-                
-                project = hopsworks.login(
-                    api_key_value=os.getenv("HOPSWORKS_API_KEY"),
-                    project=os.getenv("HOPSWORKS_PROJECT_NAME")
-                )
-                fs = project.get_feature_store()
-                
-                # Try Feature View first (same as training pipeline)
-                df = None
-                try:
-                    fv = fs.get_feature_view(
-                        name="karachi_air_quality_fv_v2",
-                        version=4
-                    )
-                    df = fv.get_batch_data()
-                except Exception as e1:
-                    # Fallback to Feature Group
-                    try:
-                        fg = fs.get_feature_group("karachi_air_quality", version=5)
-                        # Try getting feature view query
-                        query = fg.select_all()
-                        df = query.read(online=False, dataframe_type="pandas")
-                    except Exception as e2:
-                        raise Exception(f"Feature View failed: {str(e1)} | Feature Group failed: {str(e2)}")
-                
-                if df is None or df.empty:
-                    raise Exception("No data returned from Hopsworks")
-                
-                df["timestamp"] = pd.to_datetime(df["timestamp"])
-                
-                if "hour" not in df.columns:
-                    df["hour"] = df["timestamp"].dt.hour
-                if "day" not in df.columns:
-                    df["day"] = df["timestamp"].dt.day
-                if "month" not in df.columns:
-                    df["month"] = df["timestamp"].dt.month
-                if "weekday" not in df.columns:
-                    df["weekday"] = df["timestamp"].dt.weekday
-                
-                result["data"] = df.sort_values("timestamp")
-            except Exception as e:
-                result["error"] = str(e)
+        if not api_key or not project_name:
+            st.error("❌ Missing Hopsworks credentials. Check your .env or secrets.toml file.")
+            st.stop()
         
-        thread = threading.Thread(target=fetch_data)
-        thread.daemon = True
-        thread.start()
-        thread.join(timeout=timeout_seconds)
+        # Login to Hopsworks
+        with st.spinner("🔐 Connecting to Hopsworks..."):
+            project = hopsworks.login(
+                api_key_value=api_key,
+                project=project_name
+            )
+            fs = project.get_feature_store()
         
-        if result["data"] is not None:
-            return result["data"]
+        # ✅ FIX: Load directly from Feature Group (version 5 as shown in screenshot)
+        with st.spinner("📊 Loading air quality data..."):
+            fg = fs.get_feature_group(
+                name="karachi_air_quality",
+                version=5
+            )
+            
+            # Read all data from feature group
+            df = fg.read()
         
-        if result["error"]:
-            if attempt < max_retries - 1:
-                st.warning(f"⚠️ Attempt {attempt + 1} failed: {result['error'][:200]}... Retrying...")
-                continue
-            else:
-                st.error(f"⚠️ Unable to load air quality data after {max_retries} attempts")
-                st.code(result['error'], language="text")
-                
-                with st.expander("🔍 Possible Solutions"):
-                    st.markdown("""
-                    **This is a Hopsworks API/Query Service issue. Try:**
-                    
-                    1. **Check Hopsworks Status**
-                       - Go to your Hopsworks project dashboard
-                       - Verify the feature group exists and has data
-                       - Check if Query Service is enabled
-                    
-                    2. **API Key Permissions**
-                       - Make sure your API key has **read** permissions
-                       - Regenerate the API key if needed
-                    
-                    3. **Alternative: Use CSV Export**
-                       - Export feature group data as CSV from Hopsworks
-                       - Upload to GitHub repo
-                       - Load from CSV as fallback
-                    
-                    4. **Check Hopsworks Logs**
-                       - Look for errors in Hopsworks UI
-                       - Query Service might be down/overloaded
-                    
-                    5. **Verify Feature Group Version**
-                       - Make sure version 5 exists
-                       - Check if data was actually ingested
-                    """)
-                
-                st.stop()
+        if df is None or df.empty:
+            st.error("❌ Feature group 'karachi_air_quality' (v5) is empty")
+            st.stop()
         
-        if thread.is_alive():
-            if attempt < max_retries - 1:
-                st.warning(f"⚠️ Attempt {attempt + 1} timed out. Retrying...")
-                continue
-            else:
-                st.error(f"⚠️ Connection timed out after {max_retries} attempts")
-                st.stop()
-    
-    st.error("⚠️ Failed to load data")
-    st.stop()
+        # Ensure timestamp column exists and is datetime
+        if "timestamp" not in df.columns:
+            st.error("❌ 'timestamp' column not found in feature group")
+            st.stop()
+        
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        
+        # Add time-based features if missing
+        if "hour" not in df.columns:
+            df["hour"] = df["timestamp"].dt.hour
+        if "day" not in df.columns:
+            df["day"] = df["timestamp"].dt.day
+        if "month" not in df.columns:
+            df["month"] = df["timestamp"].dt.month
+        if "weekday" not in df.columns:
+            df["weekday"] = df["timestamp"].dt.weekday
+        
+        # Sort by timestamp
+        df = df.sort_values("timestamp").reset_index(drop=True)
+        
+        st.success(f"✅ Loaded {len(df)} records from Hopsworks")
+        
+        return df
+        
+    except Exception as e:
+        st.error(f"❌ Failed to load data from Hopsworks")
+        
+        with st.expander("🔍 Error Details & Solutions"):
+            st.code(str(e), language="text")
+            
+            st.markdown("""
+            **Common Issues & Fixes:**
+            
+            1. **API Key Issues**
+               - Verify your API key is correct in `.streamlit/secrets.toml`
+               - Format: `HOPSWORKS_API_KEY = "your_key_here"`
+               - NO quotes around the key in secrets.toml
+            
+            2. **Feature Group Not Found**
+               - Check that `karachi_air_quality` version 5 exists in Hopsworks
+               - Verify you've run the data ingestion pipeline first
+            
+            3. **Connection Timeout**
+               - Check your internet connection
+               - Hopsworks might be experiencing downtime
+            
+            4. **Permissions**
+               - Make sure your API key has READ access to the feature store
+               
+            **Alternative: Use Local CSV**
+            If Hopsworks is down, you can export data as CSV and load locally:
+            ```python
+            df = pd.read_csv('backup_data.csv')
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            ```
+            """)
+        
+        st.stop()
 
 @st.cache_resource(show_spinner=False)
 def get_model_metadata():
