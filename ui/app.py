@@ -516,46 +516,58 @@ def get_health_recommendation(aqi_value: float) -> str:
 # ===========================
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_historical_data():
-    """Load historical AQI data from Hopsworks Feature Store - FIXED VERSION."""
+    """Load historical AQI data from Hopsworks Feature Store - IMPROVED VERSION."""
     
     try:
         # Get API credentials - try Streamlit secrets first, then .env
         try:
             api_key = st.secrets["HOPSWORKS_API_KEY"]
             project_name = st.secrets["HOPSWORKS_PROJECT_NAME"]
-        except (FileNotFoundError, KeyError):
+            st.info(f"✅ Using Streamlit secrets - Project: {project_name}")
+        except (FileNotFoundError, KeyError) as e:
+            st.warning(f"⚠️ Streamlit secrets not found: {e}")
             api_key = os.getenv("HOPSWORKS_API_KEY")
             project_name = os.getenv("HOPSWORKS_PROJECT_NAME")
+            st.info(f"Using .env file - Project: {project_name}")
         
         if not api_key or not project_name:
-            st.error("❌ Missing Hopsworks credentials. Check your .env or secrets.toml file.")
+            st.error("❌ Missing Hopsworks credentials")
+            st.code(f"API Key present: {bool(api_key)}\nProject name: {project_name}")
             st.stop()
         
         # Login to Hopsworks
         with st.spinner("🔐 Connecting to Hopsworks..."):
+            st.write(f"Attempting login to project: {project_name}")
             project = hopsworks.login(
                 api_key_value=api_key,
                 project=project_name
             )
             fs = project.get_feature_store()
+            st.success("✅ Connected to Hopsworks!")
         
-        # ✅ FIX: Load directly from Feature Group (version 5 as shown in screenshot)
+        # Load from Feature Group
         with st.spinner("📊 Loading air quality data..."):
+            st.write("Fetching feature group: karachi_air_quality, version 5")
             fg = fs.get_feature_group(
                 name="karachi_air_quality",
                 version=5
             )
             
+            st.write(f"Feature group found: {fg.name}")
+            
             # Read all data from feature group
             df = fg.read()
+            
+            st.write(f"Data loaded - Shape: {df.shape}")
+            st.write(f"Columns: {df.columns.tolist()}")
         
         if df is None or df.empty:
-            st.error("❌ Feature group 'karachi_air_quality' (v5) is empty")
+            st.error("❌ Feature group returned empty data")
             st.stop()
         
-        # Ensure timestamp column exists and is datetime
+        # Ensure timestamp column exists
         if "timestamp" not in df.columns:
-            st.error("❌ 'timestamp' column not found in feature group")
+            st.error(f"❌ 'timestamp' column not found. Available columns: {df.columns.tolist()}")
             st.stop()
         
         df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -579,39 +591,46 @@ def load_historical_data():
         
     except Exception as e:
         st.error(f"❌ Failed to load data from Hopsworks")
+        st.error(f"Error type: {type(e).__name__}")
+        st.error(f"Error message: {str(e)}")
         
-        with st.expander("🔍 Error Details & Solutions"):
-            st.code(str(e), language="text")
-            
+        with st.expander("🔍 Full Error Traceback"):
+            import traceback
+            st.code(traceback.format_exc())
+        
+        with st.expander("🔧 Troubleshooting Steps"):
             st.markdown("""
-            **Common Issues & Fixes:**
+            **1. Verify API Key**
+            - Go to Hopsworks → Settings → API Keys
+            - Regenerate if needed
+            - Copy the FULL key (including the part after the dot)
             
-            1. **API Key Issues**
-               - Verify your API key is correct in `.streamlit/secrets.toml`
-               - Format: `HOPSWORKS_API_KEY = "your_key_here"`
-               - NO quotes around the key in secrets.toml
+            **2. Check Project Name**
+            - Your screenshot shows: `Predict_AQI`
+            - Make sure it matches exactly (case-sensitive)
             
-            2. **Feature Group Not Found**
-               - Check that `karachi_air_quality` version 5 exists in Hopsworks
-               - Verify you've run the data ingestion pipeline first
+            **3. Verify Feature Group**
+            - Feature group name: `karachi_air_quality`
+            - Version: `5` (as shown in screenshot)
             
-            3. **Connection Timeout**
-               - Check your internet connection
-               - Hopsworks might be experiencing downtime
-            
-            4. **Permissions**
-               - Make sure your API key has READ access to the feature store
-               
-            **Alternative: Use Local CSV**
-            If Hopsworks is down, you can export data as CSV and load locally:
-            ```python
-            df = pd.read_csv('backup_data.csv')
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            ```
+            **4. Test Connection Manually**
+            Run this in a Python console:
+```python
+            import hopsworks
+            project = hopsworks.login(
+                api_key_value="YOUR_KEY_HERE",
+                project="Predict_AQI"
+            )
+            fs = project.get_feature_store()
+            fg = fs.get_feature_group("karachi_air_quality", version=5)
+            df = fg.read()
+            print(df.head())
+```
             """)
         
         st.stop()
 
+        
 @st.cache_resource(show_spinner=False)
 def get_model_metadata():
     """Get model metadata from artifacts directory."""
