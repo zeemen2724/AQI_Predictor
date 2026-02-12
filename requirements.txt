@@ -5,7 +5,7 @@ matplotlib==3.8.2
 plotly==5.18.0
 
 hopsworks==3.7.0
-hsfs==3.7.9
+hsfs==3.7.0
 pyarrow==14.0.2
 duckdb==0.9.2
 
