@@ -1,11 +1,15 @@
-requests
-pandas
-scikit-learn
-joblib
-python-dotenv
+streamlit==1.32.0
+pandas==2.1.4
+numpy==1.26.4
+matplotlib==3.8.2
+plotly==5.18.0
 
-hopsworks==4.2.10
+hopsworks==3.7.0
+hsfs==3.7.0
+pyarrow==14.0.2
+duckdb==0.9.2
 
-pyarrow<15
-streamlit
-matplotlib
+scikit-learn==1.3.2
+joblib==1.3.2
+requests==2.31.0
+python-dotenv==1.0.0
