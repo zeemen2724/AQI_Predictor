@@ -111,11 +111,11 @@ st.markdown("""
         -webkit-transform: none !important;
     }
     
-    /* Sidebar wrapper */
-    [data-testid="stSidebar"] > div {
-        margin: 0 !important;
-        padding: 1.5rem !important;
-        width: 100% !important;
+    # /* Sidebar wrapper */
+    # [data-testid="stSidebar"] > div {
+    #     margin: 0 !important;
+    #     padding: 1.5rem !important;
+    #     width: 100% !important;
     }
     
     /* ============================================================
