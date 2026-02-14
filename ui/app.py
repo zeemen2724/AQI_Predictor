@@ -14,6 +14,12 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -523,51 +529,51 @@ def load_historical_data():
         try:
             api_key = st.secrets["HOPSWORKS_API_KEY"]
             project_name = st.secrets["HOPSWORKS_PROJECT_NAME"]
-            st.info(f"✅ Using Streamlit secrets - Project: {project_name}")
+            logger.info(f"✅ Using Streamlit secrets - Project: {project_name}")
         except (FileNotFoundError, KeyError) as e:
-            st.warning(f"⚠️ Streamlit secrets not found: {e}")
+            logger.warning(f"⚠️ Streamlit secrets not found: {e}")
             api_key = os.getenv("HOPSWORKS_API_KEY")
             project_name = os.getenv("HOPSWORKS_PROJECT_NAME")
-            st.info(f"Using .env file - Project: {project_name}")
+            logger.info(f"Using .env file - Project: {project_name}")
         
         if not api_key or not project_name:
-            st.error("❌ Missing Hopsworks credentials")
+            logger.error("❌ Missing Hopsworks credentials")
             st.code(f"API Key present: {bool(api_key)}\nProject name: {project_name}")
             st.stop()
         
         # Login to Hopsworks
         with st.spinner("🔐 Connecting to Hopsworks..."):
-            st.write(f"Attempting login to project: {project_name}")
+            logger.info(f"Attempting login to project: {project_name}")
             project = hopsworks.login(
                 api_key_value=api_key,
                 project=project_name
             )
             fs = project.get_feature_store()
-            st.success("✅ Connected to Hopsworks!")
+            logger.info("✅ Connected to Hopsworks!")
         
         # Load from Feature Group
         with st.spinner("📊 Loading air quality data..."):
-            st.write("Fetching feature group: karachi_air_quality, version 5")
+            logger.info("Fetching feature group: karachi_air_quality, version 5")
             fg = fs.get_feature_group(
                 name="karachi_air_quality",
                 version=5
             )
             
-            st.write(f"Feature group found: {fg.name}")
+            logger.info(f"Feature group found: {fg.name}")
             
             # Read all data from feature group
             df = fg.read()
             
-            st.write(f"Data loaded - Shape: {df.shape}")
-            st.write(f"Columns: {df.columns.tolist()}")
+            logger.info(f"Data loaded - Shape: {df.shape}")
+            logger.info(f"Columns: {df.columns.tolist()}")
         
         if df is None or df.empty:
-            st.error("❌ Feature group returned empty data")
+            logger.error("❌ Feature group returned empty data")
             st.stop()
         
         # Ensure timestamp column exists
         if "timestamp" not in df.columns:
-            st.error(f"❌ 'timestamp' column not found. Available columns: {df.columns.tolist()}")
+            logger.error(f"❌ 'timestamp' column not found. Available columns: {df.columns.tolist()}")
             st.stop()
         
         df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -585,14 +591,14 @@ def load_historical_data():
         # Sort by timestamp
         df = df.sort_values("timestamp").reset_index(drop=True)
         
-        st.success(f"✅ Loaded {len(df)} records from Hopsworks")
+        logger.info(f"✅ Loaded {len(df)} records from Hopsworks")
         
         return df
         
     except Exception as e:
-        st.error(f"❌ Failed to load data from Hopsworks")
-        st.error(f"Error type: {type(e).__name__}")
-        st.error(f"Error message: {str(e)}")
+        logger.error(f"❌ Failed to load data from Hopsworks")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
         
         with st.expander("🔍 Full Error Traceback"):
             import traceback
