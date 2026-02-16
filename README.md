@@ -1,4 +1,4 @@
-# AQI Predictor — Serverless Air Quality Forecasting System
+# AQI Predictor 
 
 Production-ready project that forecasts the Air Quality Index (AQI) for the next
 3 days using a 100% serverless ML stack. The system ingests weather and pollutant
@@ -271,11 +271,4 @@ streamlit run app.py
 - Notebook analyses and a reproducible development environment
 
 ---
-
-If you'd like, I can add:
-- CI badges for build/test coverage
-- A `LICENSE` file (MIT/Apache)
-- A short CONTRIBUTING guide and a `deploy` script
-
-File references: [src/main.py](src/main.py) • [src/models/train_models.py](src/models/train_models.py) • [ui/app.py](ui/app.py)
 
