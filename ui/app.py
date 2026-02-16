@@ -46,7 +46,7 @@ st.set_page_config(
 )
 
 # ===========================
-# CUSTOM STYLING - DARK THEME WITH RIGHT SIDEBAR
+# CUSTOM STYLING - DARK THEME WITH CLEAN SIDEBAR
 # ===========================
 st.markdown("""
 <style>
@@ -56,28 +56,13 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
         color-scheme: dark !important;
         background-color: #0f1419 !important;
-        margin: 0 !important;
-        padding: 0 !important;
     }
     
     * {
         font-family: 'Poppins', sans-serif;
     }
     
-    /* Main app container layout */
-    [data-testid="stApp"] {
-        display: block !important;
-    }
-    
-    /* Main content area - leaves 30% gap on right for the fixed sidebar */
-    [data-testid="stAppViewContainer"] {
-        background-color: #0f1419 !important;
-        width: calc(100vw - 30%) !important;
-        max-width: calc(100vw - 30%) !important;
-        margin-right: 30% !important;
-        overflow-y: auto !important;
-    }
-    
+    /* Main content styling */
     .main {
         background: #0f1419 !important;
         padding: 0 !important;
@@ -94,57 +79,11 @@ st.markdown("""
     }
     
     /* ============================================================
-       SIDEBAR - fixed on the right, always open, no toggle at all
+       SIDEBAR - Clean professional styling (no DOM hacks)
        ============================================================ */
     [data-testid="stSidebar"] {
         background: #ffffff !important;
         border-left: 2px solid #e0e0e0 !important;
-        width: 30vw !important;
-        min-width: 30vw !important;
-        max-width: 30vw !important;
-        height: 100vh !important;
-        position: fixed !important;
-        right: 0 !important;
-        top: 0 !important;
-        z-index: 999999 !important;
-        overflow-y: auto !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        transform: none !important;
-        -webkit-transform: none !important;
-    }
-    
-    # /* Sidebar wrapper */
-    # [data-testid="stSidebar"] > div {
-    #     margin: 0 !important;
-    #     padding: 1.5rem !important;
-    #     width: 100% !important;
-    }
-    
-    /* ============================================================
-       HIDE EVERY TOGGLE / COLLAPSE / MINIMIZE / MAXIMIZE BUTTON
-       ============================================================ */
-    [data-testid="collapsedControl"],
-    [data-testid="collapsibleButton"],
-    button[kind="header"],
-    [data-testid="stSidebarNav"],
-    .css-6qob1r,
-    .css-1wbdfcn,
-    [data-testid="stApp"] > button,
-    [data-testid="stSidebar"] button[data-testid="toggleSidebarButton"],
-    section[data-testid="stSidebar"] ~ div button,
-    .stSidebar .css-1wbdfcn {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-        pointer-events: none !important;
-        position: absolute !important;
-        opacity: 0 !important;
     }
     
     /* Sidebar text colors - Dark for contrast on white */
@@ -422,73 +361,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===========================
-# JS: Lock sidebar open & kill all toggle buttons permanently
-# ===========================
-st.markdown("""
-<script>
-(function() {
-    function fixSidebar() {
-        var sidebar = document.querySelector('[data-testid="stSidebar"]');
-        if (sidebar) {
-            sidebar.style.transform   = 'none';
-            sidebar.style.visibility  = 'visible';
-            sidebar.style.display     = 'block';
-            sidebar.style.opacity     = '1';
-            sidebar.style.width       = '30vw';
-            sidebar.style.minWidth    = '30vw';
-            sidebar.style.maxWidth    = '30vw';
-            sidebar.style.position    = 'fixed';
-            sidebar.style.right       = '0';
-            sidebar.style.top         = '0';
-            sidebar.style.height      = '100vh';
-            sidebar.style.zIndex      = '999999';
-        }
-
-        var selectors = [
-            '[data-testid="collapsedControl"]',
-            '[data-testid="collapsibleButton"]',
-            'button[kind="header"]',
-            '[data-testid="stSidebarNav"]',
-            '.css-6qob1r',
-            '.css-1wbdfcn'
-        ];
-        selectors.forEach(function(sel) {
-            document.querySelectorAll(sel).forEach(function(el) {
-                el.style.display       = 'none';
-                el.style.visibility    = 'hidden';
-                el.style.width         = '0';
-                el.style.height        = '0';
-                el.style.overflow      = 'hidden';
-                el.style.opacity       = '0';
-                el.style.position      = 'absolute';
-                el.style.pointerEvents = 'none';
-            });
-        });
-
-        document.querySelectorAll('button').forEach(function(btn) {
-            if (btn.querySelector('svg') && !btn.closest('[data-testid="stSidebar"]')) {
-                var rect = btn.getBoundingClientRect();
-                if (rect.width < 60 && rect.height < 60) {
-                    btn.style.display = 'none';
-                }
-            }
-        });
-    }
-
-    fixSidebar();
-
-    var observer = new MutationObserver(function() { fixSidebar(); });
-    observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class']
-    });
-})();
-</script>
-""", unsafe_allow_html=True)
-
-# ===========================
 # HELPER FUNCTIONS
 # ===========================
 def get_aqi_category_info(aqi_value: float):
@@ -621,7 +493,7 @@ def load_historical_data():
             
             **4. Test Connection Manually**
             Run this in a Python console:
-```python
+            ```python
             import hopsworks
             project = hopsworks.login(
                 api_key_value="YOUR_KEY_HERE",
@@ -631,7 +503,7 @@ def load_historical_data():
             fg = fs.get_feature_group("karachi_air_quality", version=5)
             df = fg.read()
             print(df.head())
-```
+            ```
             """)
         
         st.stop()
@@ -1012,114 +884,54 @@ else:
 st.divider()
 
 # ===========================
-# DETAILED ANALYTICS (TABS)
+# DETAILED ANALYTICS
 # ===========================
-st.markdown("<div class='section-header'>📊 Detailed Analytics & Insights</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-header'>📊 Historical Trends</div>", unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["📈 Historical Trends", "🧪 Pollutant Analysis"])
+st.markdown("#### Past 7 Days Air Quality Trend")
 
-with tab1:
-    st.markdown("#### Past 7 Days Air Quality Trend")
-    
-    fig_hist = go.Figure()
-    
-    fig_hist.add_trace(go.Scatter(
-        x=recent_df['timestamp'],
-        y=recent_df['aqi'],
-        mode='lines',
-        name='AQI',
-        line=dict(color='#667eea', width=2.5),
-        fill='tozeroy',
-        fillcolor='rgba(102, 126, 234, 0.2)',
-        hovertemplate='<b>%{x|%b %d, %I:%M %p}</b><br>AQI: %{y:.0f}<extra></extra>'
-    ))
-    
-    fig_hist.add_hline(y=50, line_dash="dash", line_color="green", opacity=0.5, annotation_text="Good")
-    fig_hist.add_hline(y=100, line_dash="dash", line_color="yellow", opacity=0.5, annotation_text="Moderate")
-    fig_hist.add_hline(y=150, line_dash="dash", line_color="orange", opacity=0.5, annotation_text="Unhealthy")
-    
-    fig_hist.update_layout(
-        title="Past 7 Days Air Quality Trend",
-        xaxis_title="Date",
-        yaxis_title="Air Quality Index (AQI)",
-        height=450,
-        hovermode='x unified',
-        plot_bgcolor='rgba(37, 45, 61, 0.5)',
-        paper_bgcolor='#1a1f2e',
-        font=dict(color='#e0e0e0'),
-        showlegend=False
-    )
-    
-    fig_hist.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)')
-    fig_hist.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)')
-    
-    st.plotly_chart(fig_hist, use_container_width=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("📊 Weekly Average", f"{recent_df['aqi'].mean():.0f}")
-    with col2:
-        st.metric("📈 Peak This Week", f"{recent_df['aqi'].max():.0f}")
-    with col3:
-        st.metric("📉 Best This Week", f"{recent_df['aqi'].min():.0f}")
+fig_hist = go.Figure()
 
-with tab2:
-    st.markdown("#### Current Pollutant Breakdown")
-    
-    pollutants = {
-        "PM2.5": "pm2_5",
-        "PM10": "pm10",
-        "CO": "carbon_monoxide",
-        "NO₂": "nitrogen_dioxide",
-        "SO₂": "sulphur_dioxide",
-        "O₃": "ozone"
-    }
-    
-    pollutant_data = []
-    for name, col in pollutants.items():
-        if col in latest_data.index and pd.notna(latest_data[col]):
-            try:
-                pollutant_data.append({"Pollutant": name, "Concentration": float(latest_data[col])})
-            except (ValueError, TypeError):
-                pass
-    
-    if pollutant_data:
-        pollutant_df = pd.DataFrame(pollutant_data)
-        
-        fig_pollutants = px.bar(
-            pollutant_df,
-            x="Pollutant",
-            y="Concentration",
-            title="Current Pollutant Concentrations (μg/m³)",
-            color="Concentration",
-            color_continuous_scale=["#28a745", "#ffc107", "#dc3545"],
-            text="Concentration"
-        )
-        
-        fig_pollutants.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-        fig_pollutants.update_layout(
-            height=400, 
-            showlegend=False,
-            plot_bgcolor='rgba(37, 45, 61, 0.5)',
-            paper_bgcolor='#1a1f2e',
-            font=dict(color='#e0e0e0'),
-            xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)'),
-            yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)')
-        )
-        
-        st.plotly_chart(fig_pollutants, use_container_width=True)
-        
-        st.info("""
-        **📌 Pollutant Guide:**
-        - **PM2.5 & PM10**: Particulate matter - main AQI contributor
-        - **CO**: Carbon monoxide from vehicles
-        - **NO₂**: Nitrogen dioxide from traffic and industry
-        - **SO₂**: Sulfur dioxide from fossil fuels
-        - **O₃**: Ozone from sunlight reacting with pollutants
-        """)
-    else:
-        st.info("📊 Pollutant data not available in current dataset")
+fig_hist.add_trace(go.Scatter(
+    x=recent_df['timestamp'],
+    y=recent_df['aqi'],
+    mode='lines',
+    name='AQI',
+    line=dict(color='#667eea', width=2.5),
+    fill='tozeroy',
+    fillcolor='rgba(102, 126, 234, 0.2)',
+    hovertemplate='<b>%{x|%b %d, %I:%M %p}</b><br>AQI: %{y:.0f}<extra></extra>'
+))
+
+fig_hist.add_hline(y=50, line_dash="dash", line_color="green", opacity=0.5, annotation_text="Good")
+fig_hist.add_hline(y=100, line_dash="dash", line_color="yellow", opacity=0.5, annotation_text="Moderate")
+fig_hist.add_hline(y=150, line_dash="dash", line_color="orange", opacity=0.5, annotation_text="Unhealthy")
+
+fig_hist.update_layout(
+    title="Past 7 Days Air Quality Trend",
+    xaxis_title="Date",
+    yaxis_title="Air Quality Index (AQI)",
+    height=450,
+    hovermode='x unified',
+    plot_bgcolor='rgba(37, 45, 61, 0.5)',
+    paper_bgcolor='#1a1f2e',
+    font=dict(color='#e0e0e0'),
+    showlegend=False
+)
+
+fig_hist.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)')
+fig_hist.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(102, 126, 234, 0.2)')
+
+st.plotly_chart(fig_hist, use_container_width=True)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("📊 Weekly Average", f"{recent_df['aqi'].mean():.0f}")
+with col2:
+    st.metric("📈 Peak This Week", f"{recent_df['aqi'].max():.0f}")
+with col3:
+    st.metric("📉 Best This Week", f"{recent_df['aqi'].min():.0f}")
 
 
 st.divider()
