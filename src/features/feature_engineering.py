@@ -1,8 +1,4 @@
-# ===========================
-# SINGLE SOURCE OF TRUTH
-# These constants are imported by train_models.py and utils.py
-# so all three files stay in sync.
-# ===========================
+
 LAGS = [1, 24, 48]
 TIME_FEATURES = ["hour", "day", "month", "weekday"]
 TARGET = "aqi"
