@@ -196,7 +196,6 @@ AQI_Predictor/
 │  └─ utils/                  # Shared utilities
 │
 ├─ ui/                        # Streamlit dashboard
-├─ scripts/                   # Helper scripts
 ├─ notebooks/                 # EDA & SHAP analysis
 ├─ requirements.txt
 └─ README.md
