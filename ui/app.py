@@ -641,7 +641,6 @@ with st.sidebar:
         st.error(f"❌ {time_since_update:.1f}h ago", icon="❌")
     
     st.markdown("**🤖 Training Pipeline**")
-    st.caption("Runs: Daily @ 8:00 AM")
     st.info("Scheduled", icon="📊")
     
     st.markdown("**🎯 Active Model**")
@@ -662,7 +661,6 @@ with st.sidebar:
     
     st.markdown("**📅 Data Information**")
     st.caption(f"Updated: {latest_data['timestamp'].strftime('%b %d, %I:%M %p')}")
-    st.caption(f"Age: {data_age_hours:.1f}h")
     st.caption(f"Total Records: {len(historical_df)}")
     st.caption(f"7-Day Average: {recent_df['aqi'].mean():.0f}")
     
