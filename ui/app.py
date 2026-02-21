@@ -968,6 +968,34 @@ with col2:
 
 st.divider()
 
+
+st.markdown("#### 🏆 Model Comparison")
+
+metrics_data = {
+    "Model": ["LinearRegression", "RandomForest", "GradientBoosting"],
+    "MAE": [6.9263, 6.9418, 6.5196],
+    "RMSE": [10.7103, 10.2606, 9.7755],
+    "R²": [0.8809, 0.8907, 0.9008]
+}
+metrics_df = pd.DataFrame(metrics_data)
+
+def highlight_best(row):
+    if row["Model"] == "GradientBoosting":
+        return ['background-color: #667eea; color: white;'] * len(row)
+    return ['color: #e0e0e0;'] * len(row)
+
+st.dataframe(
+    metrics_df.style.apply(highlight_best, axis=1)
+                    .format({"MAE": "{:.4f}", "RMSE": "{:.4f}", "R²": "{:.4f}"}),
+    use_container_width=True,
+    hide_index=True
+)
+
+st.success("✅ **Best Model: GradientBoosting** (Lowest MAE & RMSE, Highest R²)")
+st.caption("**Training data:** 8870 samples")
+
+st.divider()
+
 # ===========================
 # MODEL INFO SECTION
 # ===========================
@@ -1004,32 +1032,7 @@ with col2:
     - Prediction breakdown
     """)
 
-st.markdown("#### 🏆 Model Comparison")
 
-metrics_data = {
-    "Model": ["LinearRegression", "RandomForest", "GradientBoosting"],
-    "MAE": [6.9263, 6.9418, 6.5196],
-    "RMSE": [10.7103, 10.2606, 9.7755],
-    "R²": [0.8809, 0.8907, 0.9008]
-}
-metrics_df = pd.DataFrame(metrics_data)
-
-def highlight_best(row):
-    if row["Model"] == "GradientBoosting":
-        return ['background-color: #667eea; color: white;'] * len(row)
-    return ['color: #e0e0e0;'] * len(row)
-
-st.dataframe(
-    metrics_df.style.apply(highlight_best, axis=1)
-                    .format({"MAE": "{:.4f}", "RMSE": "{:.4f}", "R²": "{:.4f}"}),
-    use_container_width=True,
-    hide_index=True
-)
-
-st.success("✅ **Best Model: GradientBoosting** (Lowest MAE & RMSE, Highest R²)")
-st.caption("**Training data:** 8870 samples")
-
-st.divider()
 
 # ===========================
 # FOOTER
