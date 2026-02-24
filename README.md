@@ -208,7 +208,7 @@ AQI_Predictor/
 ## 1️⃣ Clone Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/zeemen2724/AQI_Predictor.git
 cd AQI_Predictor
 ```
 
