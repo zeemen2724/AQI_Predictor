@@ -390,123 +390,96 @@ def get_health_recommendation(aqi_value: float) -> str:
         return "Air quality is acceptable for most people. Enjoy outdoor activities!"
 
 # ===========================
-# ✅ FIXED: Load historical data with better error handling
+# Load historical data 
 # ===========================
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_historical_data():
-    """Load historical AQI data from Hopsworks Feature Store - IMPROVED VERSION."""
+    """
+    Load historical AQI data.
+    1) Try Hopsworks Feature Store
+    2) Fallback to local latest_features.parquet if it fails
+    """
     
     try:
-        # Get API credentials - try Streamlit secrets first, then .env
+        # =========================
+        # TRY HOPSWORKS FIRST
+        # =========================
         try:
             api_key = st.secrets["HOPSWORKS_API_KEY"]
             project_name = st.secrets["HOPSWORKS_PROJECT_NAME"]
-            logger.info(f"✅ Using Streamlit secrets - Project: {project_name}")
-        except (FileNotFoundError, KeyError) as e:
-            logger.warning(f"⚠️ Streamlit secrets not found: {e}")
+            logger.info(f"Using Streamlit secrets - Project: {project_name}")
+        except (FileNotFoundError, KeyError):
             api_key = os.getenv("HOPSWORKS_API_KEY")
             project_name = os.getenv("HOPSWORKS_PROJECT_NAME")
-            logger.info(f"Using .env file - Project: {project_name}")
-        
+            logger.info(f"Using .env credentials - Project: {project_name}")
+
         if not api_key or not project_name:
-            logger.error("❌ Missing Hopsworks credentials")
-            st.code(f"API Key present: {bool(api_key)}\nProject name: {project_name}")
-            st.stop()
-        
-        # Login to Hopsworks
+            raise ValueError("Missing Hopsworks credentials")
+
         with st.spinner("🔐 Connecting to Hopsworks..."):
-            logger.info(f"Attempting login to project: {project_name}")
             project = hopsworks.login(
                 api_key_value=api_key,
                 project=project_name
             )
             fs = project.get_feature_store()
-            logger.info("✅ Connected to Hopsworks!")
-        
-        # Load from Feature Group
-        with st.spinner("📊 Loading air quality data..."):
-            logger.info("Fetching feature group: karachi_air_quality, version 5")
+
+        with st.spinner("📊 Loading air quality data from Feature Store..."):
             fg = fs.get_feature_group(
                 name="karachi_air_quality",
                 version=5
             )
-            
-            logger.info(f"Feature group found: {fg.name}")
-            
-            # Read all data from feature group
             df = fg.read()
-            
-            logger.info(f"Data loaded - Shape: {df.shape}")
-            logger.info(f"Columns: {df.columns.tolist()}")
-        
+
         if df is None or df.empty:
-            logger.error("❌ Feature group returned empty data")
-            st.stop()
-        
-        # Ensure timestamp column exists
-        if "timestamp" not in df.columns:
-            logger.error(f"❌ 'timestamp' column not found. Available columns: {df.columns.tolist()}")
-            st.stop()
-        
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        
-        # Add time-based features if missing
-        if "hour" not in df.columns:
-            df["hour"] = df["timestamp"].dt.hour
-        if "day" not in df.columns:
-            df["day"] = df["timestamp"].dt.day
-        if "month" not in df.columns:
-            df["month"] = df["timestamp"].dt.month
-        if "weekday" not in df.columns:
-            df["weekday"] = df["timestamp"].dt.weekday
-        
-        # Sort by timestamp
-        df = df.sort_values("timestamp").reset_index(drop=True)
-        
-        logger.info(f"✅ Loaded {len(df)} records from Hopsworks")
-        
-        return df
-        
+            raise ValueError("Feature group returned empty data")
+
+        st.success("✅ Data Source: Hopsworks Feature Store")
+        logger.info(f"Loaded {len(df)} rows from Hopsworks")
+
     except Exception as e:
-        logger.error(f"❌ Failed to load data from Hopsworks")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error message: {str(e)}")
-        
-        with st.expander("🔍 Full Error Traceback"):
-            import traceback
-            st.code(traceback.format_exc())
-        
-        with st.expander("🔧 Troubleshooting Steps"):
-            st.markdown("""
-            **1. Verify API Key**
-            - Go to Hopsworks → Settings → API Keys
-            - Regenerate if needed
-            - Copy the FULL key (including the part after the dot)
-            
-            **2. Check Project Name**
-            - Your screenshot shows: `Predict_AQI`
-            - Make sure it matches exactly (case-sensitive)
-            
-            **3. Verify Feature Group**
-            - Feature group name: `karachi_air_quality`
-            - Version: `5` (as shown in screenshot)
-            
-            **4. Test Connection Manually**
-            Run this in a Python console:
-            ```python
-            import hopsworks
-            project = hopsworks.login(
-                api_key_value="YOUR_KEY_HERE",
-                project="Predict_AQI"
-            )
-            fs = project.get_feature_store()
-            fg = fs.get_feature_group("karachi_air_quality", version=5)
-            df = fg.read()
-            print(df.head())
-            ```
-            """)
-        
+        # =========================
+        # FALLBACK TO LOCAL SNAPSHOT
+        # =========================
+        logger.warning("Hopsworks unavailable. Switching to local backup.")
+        logger.warning(str(e))
+
+        # st.warning("⚠️ Hopsworks unavailable — using local backup snapshot.")
+
+        project_root = Path(__file__).parent.parent
+        local_path = project_root / "latest_features.parquet"
+
+        if not local_path.exists():
+            st.error("❌ No local backup found (latest_features.parquet missing).")
+            st.stop()
+
+        df = pd.read_parquet(local_path)
+
+        # st.success("✅ Data Source: Local Parquet Snapshot")
+        logger.info(f"Loaded {len(df)} rows from local parquet")
+
+    # =========================
+    # COMMON POST-PROCESSING
+    # =========================
+
+    if "timestamp" not in df.columns:
+        st.error("❌ 'timestamp' column missing in dataset.")
         st.stop()
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # Ensure time features exist
+    if "hour" not in df.columns:
+        df["hour"] = df["timestamp"].dt.hour
+    if "day" not in df.columns:
+        df["day"] = df["timestamp"].dt.day
+    if "month" not in df.columns:
+        df["month"] = df["timestamp"].dt.month
+    if "weekday" not in df.columns:
+        df["weekday"] = df["timestamp"].dt.weekday
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    return df
 
         
 @st.cache_resource(show_spinner=False)
@@ -629,16 +602,16 @@ with st.sidebar:
     
     st.markdown("**📊 Data Ingestion**")
     st.caption("Runs: Hourly")
-    latest_timestamp = pd.to_datetime(historical_df['timestamp'].iloc[-1])
-    now_aware_check = datetime.now(timezone.utc) if latest_timestamp.tzinfo else datetime.now()
-    time_since_update = (now_aware_check - latest_timestamp).total_seconds() / 3600
+    # latest_timestamp = pd.to_datetime(historical_df['timestamp'].iloc[-1])
+    # now_aware_check = datetime.now(timezone.utc) if latest_timestamp.tzinfo else datetime.now()
+    # time_since_update = (now_aware_check - latest_timestamp).total_seconds() / 3600
     
-    if time_since_update < 2:
-        st.success("Active", icon="✅")
-    elif time_since_update < 6:
-        st.warning(f"⚠️ {time_since_update:.1f}h ago", icon="⚠️")
-    else:
-        st.error(f"❌ {time_since_update:.1f}h ago", icon="❌")
+    # if time_since_update < 2:
+    #     st.success("Active", icon="✅")
+    # elif time_since_update < 6:
+    #     st.warning(f"⚠️ {time_since_update:.1f}h ago", icon="⚠️")
+    # else:
+    #     st.error(f"❌ {time_since_update:.1f}h ago", icon="❌")
     
     st.markdown("**🤖 Training Pipeline**")
     st.info("Scheduled", icon="📊")
