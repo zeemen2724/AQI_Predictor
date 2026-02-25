@@ -25,9 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 load_dotenv()
 
-# ===========================
-# ✅ FIX: Import the CORRECT recursive forecast from utils.py
-# ===========================
+
 from utils import generate_forecast
 
 # ===========================
